@@ -7,4 +7,10 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <ItemGroup>
+      <PackageReference Include="AngleSharp" Version="1.4.1-beta.518" />
+      <PackageReference Include="Spectre.Console" Version="0.55.1" />
+      <PackageReference Include="Spectre.Console.Cli" Version="0.55.1-alpha.0.2" />
+    </ItemGroup>
+
 </Project>
