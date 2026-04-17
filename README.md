@@ -37,14 +37,14 @@ When extracting mnemonics, each kanji span is individually tagged so you can sty
 To use CSS classes instead, provide a template string with an `{index}` placeholder:
 
 ```bash
-# Results in: <span class="kanji-0">, <span class="kanji-1">, <span class="kanji-2">...
+# Results in: <span class="kanji-1">, <span class="kanji-2">, <span class="kanji-3">...
 --mnemonic-kanji-class "kanji-{index}"
 
-# Index-first format: <span class="0-kanji">, <span class="1-kanji">...
+# Index-first format: <span class="1-kanji">, <span class="2-kanji">...
 --mnemonic-kanji-class "{index}-kanji"
 ```
 
-The placeholder `{index}` is replaced with an incrementing number (0, 1, 2, ...) for each span.
+The placeholder `{index}` is replaced with an incrementing number (1, 2, 3, ...) for each span.
 
 ### `--field` Mapping
 
