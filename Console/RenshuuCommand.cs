@@ -1,4 +1,4 @@
-﻿using Console.Models;
+using Console.Models;
 using Console.Services;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -10,11 +10,15 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 	protected override async Task<int> ExecuteAsync(CommandContext context, CommandSettings settings,
 		CancellationToken cancellationToken)
 	{
-		AnsiConsole.MarkupLine("[bold blue]Renshuu Mnemonic Extractor[/]");
+		AnsiConsole.MarkupLine("[bold blue]Renshuu Holistic Field Extractor[/]");
 		AnsiConsole.MarkupLine($"AnkiConnect: {Markup.Escape(settings.AnkiConnectUrl)}");
 		AnsiConsole.MarkupLine($"Query: {Markup.Escape(settings.Query)}");
 		AnsiConsole.MarkupLine($"Read-only: {settings.ReadOnly}");
 		AnsiConsole.WriteLine();
+
+		// Determine which mode: new --field or legacy single-field
+		var useNewMode = settings.FieldMap != null && settings.FieldMap.Count > 0;
+		var keyComparer = StringComparer.OrdinalIgnoreCase;
 
 		var httpClient = new HttpClient();
 		var ankiConnector = new AnkiConnector(httpClient, settings.AnkiConnectUrl);
@@ -34,8 +38,7 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 		}
 		catch (Exception ex)
 		{
-			AnsiConsole.MarkupLine(
-				$"[bold red]Error:[/] Failed to connect to AnkiConnect: {Markup.Escape(ex.Message)}");
+			AnsiConsole.MarkupLine($"[bold red]Error:[/] Failed to connect to AnkiConnect: {Markup.Escape(ex.Message)}");
 			return -1;
 		}
 
@@ -47,47 +50,91 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 			return 0;
 		}
 
-		// Filter: non-empty Kanji field, empty Mnemonic field
-		var keyComparer = StringComparer.OrdinalIgnoreCase;
-		var cardsNeedingMnemonics = allNotes
+		// Determine field mappings
+		Dictionary<string, string> sourceToDest;
+		string kanjiField;
+		string? mnemonicField;
+		if (useNewMode)
+		{
+			sourceToDest = new Dictionary<string, string>(settings.FieldMap!, StringComparer.OrdinalIgnoreCase);
+			kanjiField = sourceToDest["kanji"];
+
+			// Pre-flight: check kanji source is mapped
+			if (!sourceToDest.ContainsKey("kanji"))
+			{
+				AnsiConsole.MarkupLine("[bold red]Error:[/] 'kanji' source must be mapped (required to look up the kanji).");
+				AnsiConsole.MarkupLine("[bold yellow]Aborting.[/]");
+				return -1;
+			}
+
+			// Pre-flight: check destination fields exist
+			var existingFields = allNotes.SelectMany(n => n.Fields.Keys)
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
+			var missing = sourceToDest.Values
+				.Where(v => !existingFields.Contains(v))
+				.ToList();
+			if (missing.Count > 0)
+			{
+				AnsiConsole.MarkupLine($"[bold red]Error:[/] Missing fields in note type: {string.Join(", ", missing)}.");
+				AnsiConsole.MarkupLine("[bold yellow]Aborting.[/]");
+				return -1;
+			}
+
+			mnemonicField = sourceToDest.GetValueOrDefault("mnemonic");
+		}
+		else
+		{
+			kanjiField = settings.KanjiField;
+			mnemonicField = settings.MnemonicField;
+			sourceToDest = new Dictionary<string, string>
+			{
+				["kanji"] = kanjiField,
+				["mnemonic"] = settings.MnemonicField
+			};
+		}
+
+		// Step 2: Filter notes needing updates
+		var cardsNeedingUpdate = allNotes
 			.Where(n =>
 			{
-				var kanjiField = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, settings.KanjiField)).Value;
-				var mnField = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, settings.MnemonicField)).Value;
-				return kanjiField != null
-				       && !string.IsNullOrWhiteSpace(kanjiField.Value)
-				       && (settings.Overwrite || mnField == null || string.IsNullOrWhiteSpace(mnField.Value));
+				var kanjiVal = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, kanjiField)).Value;
+				var needsUpdate = kanjiVal != null && !string.IsNullOrWhiteSpace(kanjiVal.Value);
+				if (!needsUpdate) return false;
+				if (settings.Overwrite) return true;
+				if (mnemonicField == null) return true;
+				var mnVal = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, mnemonicField)).Value;
+				return mnVal == null || string.IsNullOrWhiteSpace(mnVal.Value);
 			})
 			.ToList();
 
-		AnsiConsole.MarkupLine($"[green]{cardsNeedingMnemonics.Count} cards need mnemonics.[/]");
+		AnsiConsole.MarkupLine($"[green]{cardsNeedingUpdate.Count} cards need updates.[/]");
 
-		if (cardsNeedingMnemonics.Count == 0)
+		if (cardsNeedingUpdate.Count == 0)
 		{
-			AnsiConsole.MarkupLine("[yellow]All cards already have mnemonics. Exiting.[/]");
-
+			AnsiConsole.MarkupLine("[yellow]All cards are up to date. Exiting.[/]");
 			return 0;
 		}
 
-		// Group by kanji to avoid fetching the same mnemonic twice
-		var kanjiToNotes = cardsNeedingMnemonics
+		// Step 3: Group by kanji
+		var kanjiToNotes = cardsNeedingUpdate
 			.Select(n =>
 			{
-				var kanjiField = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, settings.KanjiField)).Value;
-				return (Note: n, Kanji: kanjiField?.Value ?? "");
+				var kanjiVal = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, kanjiField)).Value;
+				return (Note: n, Kanji: kanjiVal?.Value ?? "");
 			})
 			.Where(x => !string.IsNullOrWhiteSpace(x.Kanji))
 			.GroupBy(x => x.Kanji)
 			.ToDictionary(g => g.Key, g => g.Select(x => x.Note).ToList());
 
-		// Step 2: Fetch mnemonics from Renshuu
-		AnsiConsole.MarkupLine("[bold]Fetching mnemonics from Renshuu...[/]");
+		// Step 4: Fetch KanjiResult for each unique kanji
+		AnsiConsole.MarkupLine("[bold]Fetching kanji data from Renshuu...[/]");
 
-		var mnemonicMap = new Dictionary<string, MnemonicResult>();
+		var kanjiResultMap = new Dictionary<string, KanjiResult>();
 
 		await AnsiConsole.Status()
 			.Spinner(Spinner.Known.Star)
-			.StartAsync("Fetching mnemonics...", async ctx =>
+			.StartAsync("Fetching kanji...", async ctx =>
 			{
 				var kanjiList = kanjiToNotes.Keys.ToList();
 				for (var i = 0; i < kanjiList.Count; i++)
@@ -96,18 +143,25 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 					ctx.Status($"Fetching {kanji} ({i + 1}/{kanjiList.Count})");
 
 					await rateLimiter.WaitAsync(cancellationToken);
-					var mnemonic = await scraper.ScrapeAsync(kanji, cancellationToken);
+					var result = await scraper.ScrapeFullAsync(kanji, cancellationToken);
 
-					if (mnemonic != null)
+					if (result != null)
 					{
-						var cleanedText = htmlCleaner.Clean(mnemonic.Text);
-						mnemonicMap[kanji] = mnemonic with { Kanji = kanji, Text = cleanedText };
-						AnsiConsole.MarkupLine(
-							$"[green]Found[/]: {kanji} mnemonic by {Markup.Escape(mnemonic.Author)}");
+						// Clean mnemonic text if present
+						if (result.Mnemonic != null)
+						{
+							var cleaned = htmlCleaner.Clean(result.Mnemonic.Text);
+							result = result with
+							{
+								Mnemonic = result.Mnemonic with { Text = cleaned }
+							};
+						}
+						kanjiResultMap[kanji] = result;
+						AnsiConsole.MarkupLine($"[green]Found[/]: {kanji}");
 					}
 					else
 					{
-						AnsiConsole.MarkupLine($"[yellow]Warning[/]: {kanji}: No mnemonics found");
+						AnsiConsole.MarkupLine($"[yellow]Warning[/]: {kanji}: No data found");
 					}
 				}
 			});
@@ -117,34 +171,50 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 			AnsiConsole.MarkupLine("[bold yellow]Read-only mode — no cards will be updated.[/]");
 			var table = new Table();
 			table.AddColumn("Kanji");
-			table.AddColumn("Text");
-			table.AddColumn("Author");
+			foreach (var dest in sourceToDest.Values.Distinct())
+				table.AddColumn(dest);
+
 			foreach (var kanji in kanjiToNotes.Keys)
 			{
-				if (mnemonicMap.TryGetValue(kanji, out var m))
-					table.AddRow(kanji, m.Text, m.Author);
+				var row = new List<string> { kanji };
+				if (kanjiResultMap.TryGetValue(kanji, out var kr))
+				{
+					foreach (var src in sourceToDest.Keys)
+						row.Add(MapSourceToValue(src, kr));
+				}
 				else
-					table.AddRow(Markup.Escape(kanji), "—", "[yellow]No mnemonic[/]");
+				{
+					row.AddRange(Enumerable.Repeat("[yellow]—[/]", sourceToDest.Count));
+				}
+				table.AddRow(row.ToArray());
 			}
 
 			AnsiConsole.Write(table);
-
 			return 0;
 		}
 
-		// Step 3: Update Anki cards
+		// Step 5: Update Anki cards
 		AnsiConsole.MarkupLine("[bold]Updating Anki cards...[/]");
 		var updated = 0;
 		var failed = 0;
 
 		foreach (var (kanji, notes) in kanjiToNotes)
 		{
-			if (!mnemonicMap.TryGetValue(kanji, out var mnemonic)) continue;
+			if (!kanjiResultMap.TryGetValue(kanji, out var kr)) continue;
 
 			foreach (var note in notes)
 			{
-				var success =
-					await ankiConnector.UpdateNoteAsync(note.NoteId, mnemonic.FormattedMnemonic, cancellationToken);
+				var fields = new Dictionary<string, string>();
+				foreach (var (src, dest) in sourceToDest)
+				{
+					var value = MapSourceToValue(src, kr);
+					if (!string.IsNullOrEmpty(value))
+						fields[dest] = value;
+				}
+
+				if (fields.Count == 0) continue;
+
+				var success = await ankiConnector.UpdateNoteFieldsAsync(note.NoteId, fields, cancellationToken);
 				if (success)
 				{
 					AnsiConsole.MarkupLine($"[green]Success[/]: Card {note.NoteId} ({Markup.Escape(kanji)}) updated");
@@ -162,5 +232,22 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 		AnsiConsole.MarkupLine($"[bold]Done![/] Updated: {updated}, Failed: {failed}");
 
 		return 0;
+	}
+
+	private static string MapSourceToValue(string source, KanjiResult kr)
+	{
+		return source switch
+		{
+			"kanji" => kr.Kanji,
+			"meaning" => kr.Meaning,
+			"kunyomi" => string.Join(", ", kr.Kunyomi.Select(r => string.IsNullOrEmpty(r.SchoolLevel) ? r.Text : $"{r.Text} ({r.SchoolLevel})")),
+			"onyomi" => string.Join(", ", kr.Onyomi.Select(r => string.IsNullOrEmpty(r.SchoolLevel) ? r.Text : $"{r.Text} ({r.SchoolLevel})")),
+			"radical" => kr.Radical != null ? $"{kr.Radical.Character}: {string.Join(", ", kr.Radical.Names)}" : "",
+			"strokes" => kr.Strokes > 0 ? kr.Strokes.ToString() : "",
+			"mnemonic" => kr.FormattedMnemonic,
+			"jlpt" => kr.Jlpt ?? "",
+			"kentei" => kr.Kentei ?? "",
+			_ => ""
+		};
 	}
 }
