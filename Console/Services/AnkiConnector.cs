@@ -71,10 +71,9 @@ public class AnkiConnector
 		{
 			try
 			{
-				var (result, error) = await PostAsync(request, ct);
-				var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-				var boolResult = JsonSerializer.Deserialize<bool[]>(result.GetRawText(), options);
-				return error == null && (boolResult?.FirstOrDefault() ?? false);
+				var (_, error) = await PostAsync(request, ct);
+
+				return error == null;
 			}
 			catch (HttpRequestException) when (attempt == 0)
 			{
