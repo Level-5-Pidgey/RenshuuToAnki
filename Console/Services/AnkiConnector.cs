@@ -19,9 +19,9 @@ public class AnkiConnector
 	public async Task<NoteInfo[]> NotesInfoAsync(string query, CancellationToken ct = default)
 	{
 		var request = new AnkiRequest("notesInfo", new { query });
-		var response = await PostAsync(request, ct);
+		var (result, _) = await PostAsync(request, ct);
 		var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-		var deserializeResult = JsonSerializer.Deserialize<NoteInfo[]>(response.GetRawText(), options);
+		var deserializeResult = JsonSerializer.Deserialize<NoteInfo[]>(result.GetRawText(), options);
 		if (deserializeResult == null) return [];
 		for (var i = 0; i < deserializeResult.Length; i++)
 		{
@@ -46,10 +46,10 @@ public class AnkiConnector
 		{
 			try
 			{
-				var response = await PostAsync(request, ct);
+				var (result, _) = await PostAsync(request, ct);
 				var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-				var result = JsonSerializer.Deserialize<bool[]>(response.GetRawText(), options);
-				return result?.FirstOrDefault() ?? false;
+				var boolResult = JsonSerializer.Deserialize<bool[]>(result.GetRawText(), options);
+				return boolResult?.FirstOrDefault() ?? false;
 			}
 			catch (HttpRequestException) when (attempt == 0)
 			{
@@ -71,10 +71,10 @@ public class AnkiConnector
 		{
 			try
 			{
-				var response = await PostAsync(request, ct);
+				var (result, error) = await PostAsync(request, ct);
 				var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-				var result = JsonSerializer.Deserialize<bool[]>(response.GetRawText(), options);
-				return result?.FirstOrDefault() ?? false;
+				var boolResult = JsonSerializer.Deserialize<bool[]>(result.GetRawText(), options);
+				return error == null && (boolResult?.FirstOrDefault() ?? false);
 			}
 			catch (HttpRequestException) when (attempt == 0)
 			{
@@ -85,7 +85,7 @@ public class AnkiConnector
 		return false;
 	}
 
-	private async Task<JsonElement> PostAsync(AnkiRequest request, CancellationToken ct)
+	private async Task<(JsonElement Result, string? Error)> PostAsync(AnkiRequest request, CancellationToken ct)
 	{
 		var options = new JsonSerializerOptions
 		{
@@ -103,10 +103,17 @@ public class AnkiConnector
 		using var jsonDoc = JsonDocument.Parse(responseBody);
 		var root = jsonDoc.RootElement;
 
-		if (root.TryGetProperty("error", out var errorElement) && errorElement.ValueKind != JsonValueKind.Null)
-			throw new Exception($"AnkiConnect error: {errorElement.GetString()}");
+		var error = root.TryGetProperty("error", out var errorElement) && errorElement.ValueKind != JsonValueKind.Null
+			? errorElement.GetString()
+			: null;
 
-		return root.TryGetProperty("result", out var resultElement) ? resultElement.Clone() : default;
+		if (error != null)
+		{
+			throw new Exception($"AnkiConnect error: {error}");
+		}
+
+		var result = root.TryGetProperty("result", out var resultElement) ? resultElement.Clone() : default;
+		return (result, error);
 	}
 }
 
