@@ -323,4 +323,47 @@ public class RenshuuScraperTests
 		Assert.That(result, Is.Not.Null);
 		Assert.That(result!.Kentei, Is.EqualTo("2級"));
 	}
+
+	[Test]
+	public async Task ScrapeFullAsync_FullPage_AllFieldsPopulated()
+	{
+		// Full real HTML from Renshuu for "万" — trimmed for JSON string formatting
+		var jsonResponse = "{\"stext_kanji\": \"<div class='flexbox  dict_kparent' id='termbox2630'><div class='ffixed pushRight'><div class='center'  id='the_dict_kanji'>万</div><div class=\\\"flexbox icon_box\\\" style=\\\"justify-content: space-around\\\"><div ></div><div></div><div></div></div></div><div class='grow'><div class=\\\"kdict_kinfo\\\">Kunyomi: <span class=\\\"grey\\\"><span data-dj='1'  class=\\\"lnk\\\"   onclick=\\\"dJ('k','r=よろず' )\\\">よろず</span></span><sub class='little' >x</sub><br/>Onyomi: <span class=\\\"grey\\\"><span data-dj='1'  class=\\\"lnk\\\"   onclick=\\\"dJ('k','r=マン' )\\\">マン</span></span><sub class='little' >小</sub>, <span class=\\\"grey\\\"><span data-dj='1'  class=\\\"lnk\\\"   onclick=\\\"dJ('k','r=バン' )\\\">バン</span></span><sub class='little' >中</sub><br/>Strokes: 3<br/>Radical:  <span class=\\\"noto\\\"><span data-klook>一</span></span> <span class='little'>(いち)</span><br/></div><div style='margin-bottom:10px'>kyouiku</div></div></div><div style=' margin-bottom: 10px'><div  style=' font-size: 165%;'>ten thousand, 10,000 </div></div><div id=\\\"mnemonic_holder_2630\\\"><div class=\\\"mnemonic_box\\\" id=\\\"mnbox_3542\\\"><div class=\\\"flexbox fcenter\\\"><div id=\\\"mnimg_3542\\\"><img src=\\\"https://iserve.renshuu.org/img/mns/w3pwrbsfzqwg6oxhd4mxf.svg\\\"/></div><div class=\\\"grow\\\"><div id=\\\"mnemonic_3542\\\"> It looks like a T for ten and the h in thousand </div><div class=\\\" indent\\\"><span class=\\\"little\\\">Written by: <a href=\\\"https://www.renshuu.org/me/120824\\\">バレリー</a></span></div></div></div></div></div>\"}";
+
+		var handlerMock = new Mock<HttpMessageHandler>();
+		handlerMock.Protected()
+			.Setup<Task<HttpResponseMessage>>(
+				"SendAsync",
+				ItExpr.IsAny<HttpRequestMessage>(),
+				ItExpr.IsAny<CancellationToken>())
+			.ReturnsAsync(new HttpResponseMessage
+			{
+				StatusCode = HttpStatusCode.OK,
+				Content = new StringContent(jsonResponse)
+			});
+
+		var scraper = CreateScraper(handlerMock);
+		var result = await scraper.ScrapeFullAsync("万", CancellationToken.None);
+
+		Assert.That(result, Is.Not.Null);
+		Assert.Multiple(() =>
+		{
+			Assert.That(result!.Kanji, Is.EqualTo("万"));
+			Assert.That(result.Meaning, Is.EqualTo("ten thousand, 10,000"));
+			Assert.That(result.Kunyomi.Count, Is.EqualTo(1));
+			Assert.That(result.Kunyomi[0].Text, Is.EqualTo("よろず"));
+			Assert.That(result.Kunyomi[0].SchoolLevel, Is.EqualTo("x"));
+			Assert.That(result.Onyomi.Count, Is.EqualTo(2));
+			Assert.That(result.Onyomi[0].Text, Is.EqualTo("マン"));
+			Assert.That(result.Onyomi[0].SchoolLevel, Is.EqualTo("小"));
+			Assert.That(result.Onyomi[1].Text, Is.EqualTo("バン"));
+			Assert.That(result.Onyomi[1].SchoolLevel, Is.EqualTo("中"));
+			Assert.That(result.Strokes, Is.EqualTo(3));
+			Assert.That(result.Radical!.Character, Is.EqualTo("一"));
+			Assert.That(result.Radical.Names, Is.EqualTo(["いち"]));
+			Assert.That(result.Mnemonic, Is.Not.Null);
+			Assert.That(result.Mnemonic!.Text.Trim(), Does.Contain("It looks like a T for ten"));
+			Assert.That(result.Mnemonic.Author, Is.EqualTo("バレリー"));
+		});
+	}
 }
