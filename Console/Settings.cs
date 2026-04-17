@@ -18,31 +18,31 @@ public class Settings : CommandSettings
         Overwrite = overwrite;
     }
 
-    [CommandOption("--query")]
+    [CommandOption("-q|--query")]
     [Description("Anki search query to find notes. E.g. 'tag:Languages::Japanese::Writing::Kanji' or 'deck:Kanji'")]
     public required string Query { get; init; }
 
-    [CommandOption("--anki-url")]
+    [CommandOption("-u|--anki-url")]
     [Description("AnkiConnect HTTP URL.")]
     public string AnkiConnectUrl { get; init; } = "http://localhost:8765";
 
-    [CommandOption("--rpm")]
+    [CommandOption("-l|--rpm")]
     [Description("Max requests per minute to Renshuu.")]
     public int RequestsPerMinute { get; init; } = 120;
 
-    [CommandOption("--read-only")]
+    [CommandOption("-r|--read-only")]
     [Description("Preview changes without writing to Anki.")]
     public bool ReadOnly { get; init; }
 
-    [CommandOption("--kanji-field")]
+    [CommandOption("-k|--kanji-field")]
     [Description("Field containing the kanji character to look up.")]
     public string KanjiField { get; } = "Kanji";
 
-    [CommandOption("--mnemonic-field")]
+    [CommandOption("-m|--mnemonic-field")]
     [Description("Field to write fetched mnemonics into.")]
     public string MnemonicField { get; } = "Mnemonic";
 
-    [CommandOption("--overwrite")]
+    [CommandOption("-o|--overwrite")]
     [Description("Overwrite existing mnemonic values.")]
     public bool Overwrite { get; }
 }
