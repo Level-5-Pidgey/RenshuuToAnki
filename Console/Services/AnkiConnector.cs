@@ -35,11 +35,36 @@ public class AnkiConnector
 		return deserializeResult;
 	}
 
-	public async Task<bool> UpdateNoteAsync(long noteId, string value, CancellationToken ct = default)
+	internal async Task<bool> UpdateNoteAsync(long noteId, string value, CancellationToken ct = default)
 	{
 		var request = new AnkiRequest("updateNote", new
 		{
 			note = new { id = noteId, fields = new { field = value } }
+		});
+
+		for (var attempt = 0; attempt < 2; attempt++)
+		{
+			try
+			{
+				var response = await PostAsync(request, ct);
+				var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+				var result = JsonSerializer.Deserialize<bool[]>(response.GetRawText(), options);
+				return result?.FirstOrDefault() ?? false;
+			}
+			catch (HttpRequestException) when (attempt == 0)
+			{
+				await Task.Delay(500, ct);
+			}
+		}
+
+		return false;
+	}
+
+	public async Task<bool> UpdateNoteFieldsAsync(long noteId, Dictionary<string, string> fields, CancellationToken ct = default)
+	{
+		var request = new AnkiRequest("updateNote", new
+		{
+			note = new { id = noteId, fields }
 		});
 
 		for (var attempt = 0; attempt < 2; attempt++)

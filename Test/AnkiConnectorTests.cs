@@ -161,4 +161,49 @@ public class AnkiConnectorTests
 			Assert.That(result[0].Fields["kanji"].Value, Is.EqualTo("日"));
 		});
 	}
+
+	[Test]
+	public async Task UpdateNoteFieldsAsync_SendsAllFieldsInOneCall()
+	{
+		long? capturedNoteId = null;
+		Dictionary<string, string>? capturedFields = null;
+
+		var handlerMock = new Mock<HttpMessageHandler>();
+		handlerMock.Protected()
+			.Setup<Task<HttpResponseMessage>>(
+				"SendAsync",
+				ItExpr.IsAny<HttpRequestMessage>(),
+				ItExpr.IsAny<CancellationToken>())
+			.ReturnsAsync(new HttpResponseMessage
+			{
+				StatusCode = HttpStatusCode.OK,
+				Content = new StringContent("{\"error\":null,\"result\":[true]}")
+			})
+			.Callback<HttpRequestMessage, CancellationToken>((req, _) =>
+			{
+				var body = req.Content.ReadAsStringAsync().Result;
+				using var doc = System.Text.Json.JsonDocument.Parse(body);
+				capturedNoteId = doc.RootElement.GetProperty("params").GetProperty("note").GetProperty("id").GetInt64();
+				var fields = doc.RootElement.GetProperty("params").GetProperty("note").GetProperty("fields");
+				capturedFields = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(fields.GetRawText());
+			});
+
+		var httpClient = new HttpClient(handlerMock.Object);
+		var connector = new AnkiConnector(httpClient, "http://localhost:8765");
+
+		var fields = new Dictionary<string, string>
+		{
+			["Meaning"] = "ten thousand",
+			["Kunyomi"] = "よろず (x)"
+		};
+		var result = await connector.UpdateNoteFieldsAsync(12345, fields, CancellationToken.None);
+
+		Assert.That(result, Is.True);
+		Assert.That(capturedNoteId, Is.EqualTo(12345));
+		Assert.Multiple(() =>
+		{
+			Assert.That(capturedFields!["Meaning"], Is.EqualTo("ten thousand"));
+			Assert.That(capturedFields["Kunyomi"], Is.EqualTo("よろず (x)"));
+		});
+	}
 }
