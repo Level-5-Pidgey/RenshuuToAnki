@@ -21,14 +21,14 @@ dotnet run
 
 ## CLI Options
 
-| Option       | Description                                                                                            | Default                 |
-|--------------|--------------------------------------------------------------------------------------------------------|-------------------------|
-| `--query`    | Anki search query for cards to update                                                                  | (none)                  |
-| `--anki-url` | AnkiConnect HTTP URL                                                                                   | `http://localhost:8765` |
-| `--rpm`      | Max requests per minute to Renshuu                                                                     | `120`                   |
-| `--field`    | Source→destination field mapping                                                                       | (none)                  |
-| `--mode`     | Operation mode: `readonly` (preview only), `replace` (update all), `addempty` (only fill empty fields) | `addempty`              |
-| `--mnemonic-kanji-class` | CSS class template for kanji spans in mnemonics (must contain `{index}` placeholder) | (sequential colors)    |
+| Option                   | Description                                                                                            | Default                 |
+|--------------------------|--------------------------------------------------------------------------------------------------------|-------------------------|
+| `--query`                | Anki search query for cards to update                                                                  | (none)                  |
+| `--anki-url`             | AnkiConnect HTTP URL                                                                                   | `http://localhost:8765` |
+| `--rpm`                  | Max requests per minute to Renshuu                                                                     | `120`                   |
+| `--field`                | Source→destination field mapping                                                                       | (none)                  |
+| `--mode`                 | Operation mode: `readonly` (preview only), `replace` (update all), `addempty` (only fill empty fields) | `addempty`              |
+| `--mnemonic-kanji-class` | CSS class template for kanji spans in mnemonics (must contain `{index}` placeholder)                   | (sequential colors)     |
 
 ### `--mnemonic-kanji-class` Formatting
 
@@ -52,23 +52,24 @@ The `--field` option maps Renshuu data sources to Anki note fields. Specify mult
 
 **Supported sources:** `kanji`, `kunyomi`, `onyomi`, `radical`, `meaning`, `strokes`, `mnemonic`, `jlpt`, `kentei`
 
-**Example — Full multi-field update:**
+**Example — Updating multiple fields:**  
+
+This is my personal workflow.
+
 ```bash
 dotnet run -- \
-    --query "deck:Kanji" \
-    --field kanji=Character \
-    --field meaning=Meaning \
-    --field kunyomi=Kunyomi \
-    --field onyomi=Onyomi \
-    --field radical=Radical \
-    --field strokes=Strokes \
-    --field mnemonic=Mnemonic
+    --query="tag:Languages::Japanese::Writing::Kanji" \
+    --mode replace \
+    --field kanji=Kanji \
+    --field mnemonic=Mnemonic \
+    --field onyomi=Reading \
+    --field meaning=Meaning
 ```
 
 **Example — Meaning-only update (read-only preview):**
 ```bash
 dotnet run -- \
-    --query "tag:new" \
+    --query "deck:Kanji" \
     --field kanji=Character \
     --field meaning=Meaning \
     --mode readonly

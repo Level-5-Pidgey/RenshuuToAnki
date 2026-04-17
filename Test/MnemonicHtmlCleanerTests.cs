@@ -117,7 +117,7 @@ public class MnemonicHtmlCleanerTests
 
 		var result = cleaner.Clean(input);
 
-		Assert.That(result, Does.Contain(@"class=""kanji-0"""));
+		Assert.That(result, Does.Contain(@"class=""kanji-1"""));
 	}
 
 	[Test]
@@ -128,7 +128,7 @@ public class MnemonicHtmlCleanerTests
 
 		var result = cleaner.Clean(input);
 
-		Assert.That(result, Does.Contain(@"class=""0-kanji"""));
+		Assert.That(result, Does.Contain(@"class=""1-kanji"""));
 	}
 
 	[Test]
@@ -139,9 +139,9 @@ public class MnemonicHtmlCleanerTests
 
 		var result = cleaner.Clean(input);
 
-		Assert.That(result, Does.Contain(@"class=""kanji-0"""));
 		Assert.That(result, Does.Contain(@"class=""kanji-1"""));
 		Assert.That(result, Does.Contain(@"class=""kanji-2"""));
+		Assert.That(result, Does.Contain(@"class=""kanji-3"""));
 	}
 
 	[Test]
@@ -153,7 +153,7 @@ public class MnemonicHtmlCleanerTests
 		var result = cleaner.Clean(input);
 
 		// 彡 appears twice but should only use one color
-		var matches = System.Text.RegularExpressions.Regex.Matches(result, @"color=""#fc3199""");
+		var matches = System.Text.RegularExpressions.Regex.Matches(result, @"style=""color: #fc3199""");
 		Assert.That(matches.Count, Is.EqualTo(2)); // Both 彡 occurrences share color
 	}
 
@@ -165,7 +165,7 @@ public class MnemonicHtmlCleanerTests
 
 		var result = cleaner.Clean(input);
 
-		Assert.That(result, Does.Contain("<span color="));
+		Assert.That(result, Does.Contain("<span style="));
 		Assert.That(result, Does.Contain(">マ</span>"));
 		Assert.That(result, Does.Not.Contains("mn_dpiece"));
 		Assert.That(result, Does.Not.Contains("data-tip"));
@@ -179,7 +179,7 @@ public class MnemonicHtmlCleanerTests
 
 		var result = cleaner.Clean(input);
 
-		Assert.That(result, Does.Contain(@"class=""kanji-0"">マ</span>"));
+		Assert.That(result, Does.Contain(@"class=""kanji-1"">マ</span>"));
 	}
 
 	[Test]
@@ -190,7 +190,7 @@ public class MnemonicHtmlCleanerTests
 
 		var result = cleaner.Clean(input);
 
-		Assert.That(result, Does.Contain("<span color="));
+		Assert.That(result, Does.Contain("<span style="));
 		Assert.That(result, Does.Contain("<svg"));
 		Assert.That(result, Does.Not.Contains("mn_spiece"));
 		Assert.That(result, Does.Not.Contains("mn_dpiece"));
@@ -204,7 +204,7 @@ public class MnemonicHtmlCleanerTests
 
 		var result = cleaner.Clean(input);
 
-		Assert.That(result, Does.Contain("""class="svg-0">"""));
+		Assert.That(result, Does.Contain("""class="svg-1">"""));
 		Assert.That(result, Does.Contain("<svg"));
 	}
 
@@ -216,9 +216,9 @@ public class MnemonicHtmlCleanerTests
 
 		var result = cleaner.Clean(input);
 
-		Assert.That(result, Does.Contain(@"color=""#fc3199""")); // 人
-		Assert.That(result, Does.Contain(@"color=""#f5c10f""")); // 大
-		Assert.That(result, Does.Contain(@"color=""#aa1aff""")); // 一
+		Assert.That(result, Does.Contain(@"style=""color: #fc3199""")); // 人
+		Assert.That(result, Does.Contain(@"style=""color: #f5c10f""")); // 大
+		Assert.That(result, Does.Contain(@"style=""color: #aa1aff""")); // 一
 	}
 
 	[Test]

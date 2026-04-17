@@ -34,6 +34,21 @@ public partial class MnemonicHtmlCleaner(string? kanjiClass = null)
 	[GeneratedRegex(@"<div[^>]*\bmn_dpiece\b[^>]*>((?:<span[^>]*>[^<]*</span>)?)</div>", RegexOptions.IgnoreCase, "en-AU")]
 	private static partial Regex KanjiSpanRegex();
 
+	[GeneratedRegex(@"<div[^>]*\bmn_dpiece\b[^>]*>([^<]{1,3})</div>", RegexOptions.IgnoreCase, "en-AU")]
+	private static partial Regex MnDpieceTextFallbackRegex();
+
+	[GeneratedRegex(@"stroke:#000", RegexOptions.IgnoreCase, "en-AU")]
+	private static partial Regex SvgStrokeColorRegex();
+
+	[GeneratedRegex(@"<svg[^>]*>", RegexOptions.IgnoreCase, "en-AU")]
+	private static partial Regex SvgTagRegex();
+
+	[GeneratedRegex(@"<span data-kanji-svg="""">(.*?)</span>", RegexOptions.IgnoreCase | RegexOptions.Singleline, "en-AU")]
+	private static partial Regex DataKanjiSvgRegex();
+
+	[GeneratedRegex(@"<span data-kanji="""">([^<]*)</span>", RegexOptions.IgnoreCase, "en-AU")]
+	private static partial Regex DataKanjiRegex();
+
 	[GeneratedRegex(@"<div[^>]*\bhunderline_\d+\b[^>]*>([^<]*)</div>", RegexOptions.IgnoreCase, "en-AU")]
 	private static partial Regex UnderlineRegex();
     
@@ -60,6 +75,64 @@ public partial class MnemonicHtmlCleaner(string? kanjiClass = null)
 		}
 
 		var result = html;
+
+		// Phase 1: Convert all kanji-bearing elements to neutral placeholders with data attributes.
+		// This ensures processing happens in document order regardless of element type.
+
+		// Replace spans with data-klook - mark as regular kanji
+		result = SpanReplacementRegex().Replace(result, match =>
+		{
+			var charContent = match.Groups[1].Value;
+			return $"<span data-kanji=\"\">{charContent}</span>";
+		});
+
+		// Handle mn_dpiece divs with data-tip containing direct text (not wrapped in span)
+		result = MnDpieceTipRegex().Replace(result, match =>
+		{
+			var innerContent = match.Groups[2].Value;
+			if (string.IsNullOrWhiteSpace(innerContent) || innerContent == "\u00A0" || innerContent == "&nbsp;")
+			{
+				return match.Value;
+			}
+			return $"<span data-kanji=\"\">{innerContent}</span>";
+		});
+
+		// Handle mn_spiece divs containing inline SVGs - mark as SVG kanji
+		result = MnSpieceSvgRegex().Replace(result, match =>
+		{
+			var svgContent = match.Groups[1].Value;
+			return $"<span data-kanji-svg=\"\">{svgContent}</span>";
+		});
+
+		// Handle mn_dpiece divs with direct text content (like ⺍) - mark as regular kanji
+		result = MnDpieceTextFallbackRegex().Replace(result, match =>
+		{
+			var innerContent = match.Groups[1].Value;
+			return $"<span data-kanji=\"\">{innerContent}</span>";
+		});
+
+		// Handle mn_dpiece divs that contain only the kanji span - unwrap them
+		result = KanjiSpanRegex().Replace(result, "$1");
+
+		// Remove hunderline_* classes and their wrapper divs
+		result = UnderlineRegex().Replace(result, "$1");
+
+		// Remove ib and flbox_* classes
+		result = FlexboxRegex().Replace(result, "");
+		result = ClassAttributeRegex().Replace(result, "");
+		result = DoubleSpaceRegex().Replace(result, " ");
+
+		// Remove empty class attributes
+		result = EmptyClassAttrRegex().Replace(result, "$1$2");
+
+		// Unwrap empty divs
+		result = UnwrapEmptyDivRegex().Replace(result, "$1");
+
+		// Clean up double spaces
+		result = DoubleSpaceRegex().Replace(result, " ");
+
+		// Phase 2: Collect all kanji elements in document order and apply styling with consistent indexing
+
 		var spanIndex = 0;
 		var contentToIndex = new Dictionary<string, int>();
 
@@ -73,99 +146,74 @@ public partial class MnemonicHtmlCleaner(string? kanjiClass = null)
 			return idx;
 		}
 
-		// Replace spans with data-klook - these contain individual kanji characters
-		// Pattern: <span data-klook="">CHAR</span>
-		// Replace with: <span class="configured-class-#">CHAR</span> or <span color="#...">CHAR</span> if no class configured
-		// Same content gets the same index (and thus same color) for consistency
-		if (!string.IsNullOrEmpty(kanjiClass))
-		{
-			// Replace {index} placeholder in the class format string with the content-based index
-			result = SpanReplacementRegex().Replace(result, match =>
-			{
-				var charContent = match.Groups[1].Value;
-				return $"<span class=\"{kanjiClass.Replace("{index}", GetOrCreateIndex(charContent).ToString())}\">{charContent}</span>";
-			});
-		}
-		else
-		{
-			// Add color attribute cycling through the palette based on content
-			result = SpanReplacementRegex().Replace(result, match =>
-			{
-				var charContent = match.Groups[1].Value;
-				var idx = GetOrCreateIndex(charContent);
-				var color = SpanColors[idx % SpanColors.Length];
-				return $"<span color=\"{color}\">{charContent}</span>";
-			});
-		}
-
-		// Handle mn_dpiece divs with data-tip containing direct text (not wrapped in span)
-		// Pattern: <div class="mn_dpiece" data-tip="content">TEXT</div>
-		// Convert to: <span class="configured-class">TEXT</span> or <span color="#...">TEXT</span>
-		result = MnDpieceTipRegex().Replace(result, match =>
-		{
-			var innerContent = match.Groups[2].Value;
-			// data-tip often contains &nbsp; for spacing - only create span if meaningful
-			if (string.IsNullOrWhiteSpace(innerContent) || innerContent == "\u00A0" || innerContent == "&nbsp;")
-			{
-				return match.Value; // Keep original if no meaningful content
-			}
-
-			if (!string.IsNullOrEmpty(kanjiClass))
-			{
-				return $"<span class=\"{kanjiClass.Replace("{index}", GetOrCreateIndex(innerContent).ToString())}\">{innerContent}</span>";
-			}
-			else
-			{
-				var idx = GetOrCreateIndex(innerContent);
-				var color = SpanColors[idx % SpanColors.Length];
-				return $"<span color=\"{color}\">{innerContent}</span>";
-			}
-		});
-
-		// Handle mn_spiece divs containing inline SVGs - wrap the SVG in a styled span
-		// Pattern: <div class="mn_dpiece mn_spiece"><svg>...</svg></div>
-		// Convert to: <span class="..."><svg>...</svg></span> or <span color="..."><svg>...</svg></span>
-		result = MnSpieceSvgRegex().Replace(result, match =>
+		// Process SVG spans first (they need stroke color replacement and default sizing)
+		result = DataKanjiSvgRegex().Replace(result, match =>
 		{
 			var svgContent = match.Groups[1].Value;
+			var idx = GetOrCreateIndex(svgContent);
+
+			// Add default styling attributes to the SVG tag if not already present
+			var styledSvg = SvgStrokeColorRegex().Replace(svgContent, $"stroke:{SpanColors[idx % SpanColors.Length]}");
+			styledSvg = AddDefaultSvgAttributes(styledSvg);
+
 			if (!string.IsNullOrEmpty(kanjiClass))
 			{
-				return $"<span class=\"{kanjiClass.Replace("{index}", GetOrCreateIndex(svgContent).ToString())}\">{svgContent}</span>";
+				var className = kanjiClass.Replace("{index}", (idx + 1).ToString());
+				return $"<span class=\"{className}\">{styledSvg}</span>";
 			}
-			else
-			{
-				var idx = GetOrCreateIndex(svgContent);
-				var color = SpanColors[idx % SpanColors.Length];
-				return $"<span color=\"{color}\">{svgContent}</span>";
-			}
+			var color = SpanColors[idx % SpanColors.Length];
+			return $"<span style=\"color: {color}\">{styledSvg}</span>";
 		});
 
-		// Handle mn_dpiece divs that contain only the kanji span - unwrap them
-		// Pattern: <div class="ib mn_dpiece flbox_flat"><span class="kanji">人</span></div>
-		// These should become just: <span class="kanji">人</span>
-		result = KanjiSpanRegex().Replace(result, "$1");
-
-		// Remove hunderline_* classes and their wrapper divs if no other content
-		// Pattern: <div class="hunderline_1">content</div> -> content
-		result = UnderlineRegex().Replace(result, "$1");
-
-		// Remove ib and flbox_* classes from remaining divs/spans
-		// Use word boundaries to match complete class names only
-		result = FlexboxRegex().Replace(result, "");
-		// Clean up class attributes - remove empty class=""
-		result = ClassAttributeRegex().Replace(result, "");
-		// Clean up any double spaces
-		result = DoubleSpaceRegex().Replace(result, " ");
-
-		// Remove empty class attributes
-		result = EmptyClassAttrRegex().Replace(result, "$1$2");
-
-		// Unwrap empty divs (divs with no attributes and just text content)
-		result = UnwrapEmptyDivRegex().Replace(result, "$1");
-
-		// Clean up any double spaces again to be sure
-		result = DoubleSpaceRegex().Replace(result, " ");
+		// Process regular kanji spans
+		result = DataKanjiRegex().Replace(result, match =>
+		{
+			var content = match.Groups[1].Value;
+			var idx = GetOrCreateIndex(content);
+			if (!string.IsNullOrEmpty(kanjiClass))
+			{
+				var className = kanjiClass.Replace("{index}", (idx + 1).ToString());
+				return $"<span class=\"{className}\">{content}</span>";
+			}
+			var color = SpanColors[idx % SpanColors.Length];
+			return $"<span style=\"color: {color}\">{content}</span>";
+		});
 
 		return result.Trim();
+	}
+
+	private static string AddDefaultSvgAttributes(string svgContent)
+	{
+		return SvgTagRegex().Replace(svgContent, match =>
+		{
+			var svgTag = match.Value;
+			var closingBracket = svgTag.LastIndexOf('>');
+			if (closingBracket == -1)
+			{
+				return svgTag;
+			}
+
+			var openingPortion = svgTag[..(closingBracket + 1)];
+			var attributes = "";
+
+			if (!openingPortion.Contains("width="))
+			{
+				attributes += @" width=""24px""";
+			}
+			if (!openingPortion.Contains("height="))
+			{
+				attributes += @" height=""24px""";
+			}
+			if (!openingPortion.Contains("viewBox="))
+			{
+				attributes += @" viewBox=""0 0 109 109""";
+			}
+			if (!openingPortion.Contains("preserveAspectRatio="))
+			{
+				attributes += @" preserveAspectRatio=""xMidYMid meet""";
+			}
+
+			return openingPortion + attributes + ">";
+		});
 	}
 }
