@@ -112,4 +112,47 @@ public class AnkiConnectorTests
             Assert.That(callCount, Is.EqualTo(2));
         });
     }
+
+    [Test]
+    public async Task NotesInfoAsync_FieldMatchingIsCaseInsensitive()
+    {
+        var jsonResponse = """
+        [
+          {
+            "noteId": 1502298033753,
+            "modelName": "Basic",
+            "tags": [],
+            "fields": {
+              "kanji": { "value": "日", "order": 0 },
+              "mnemonic": { "value": "", "order": 1 }
+            },
+            "mod": 1718377864,
+            "cards": [1498938915662]
+          }
+        ]
+        """;
+        var handlerMock = new Mock<HttpMessageHandler>();
+        handlerMock
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>(
+                "SendAsync",
+                ItExpr.IsAny<HttpRequestMessage>(),
+                ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage
+            {
+                StatusCode = HttpStatusCode.OK,
+                Content = new StringContent(jsonResponse)
+            });
+
+        var connector = CreateConnector(handlerMock);
+        var result = await connector.NotesInfoAsync("deck:Kanji");
+
+        Assert.That(result.Length, Is.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result[0].Fields.ContainsKey("kanji"), Is.True);
+            Assert.That(result[0].Fields.ContainsKey("KANJI"), Is.True);
+            Assert.That(result[0].Fields["kanji"].Value, Is.EqualTo("日"));
+        });
+    }
 }

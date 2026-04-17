@@ -56,12 +56,15 @@ public class RenshuuCommand : Command<Settings>
         }
 
         // Filter: non-empty Kanji field, empty Mnemonic field
-        // Adjust field names ("Kanji", "Mnemonic") to match your note type
+        var keyComparer = StringComparer.OrdinalIgnoreCase;
         var cardsNeedingMnemonics = allNotes
-            .Where(n => n.Fields.TryGetValue("Kanji", out var kanjiField)
-                        && !string.IsNullOrWhiteSpace(kanjiField.Value)
-                        && (!n.Fields.TryGetValue("Mnemonic", out var mnField)
-                            || string.IsNullOrWhiteSpace(mnField?.Value)))
+            .Where(n => {
+                var kanjiField = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, settings.KanjiField)).Value;
+                var mnField = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, settings.MnemonicField)).Value;
+                return kanjiField != null
+                    && !string.IsNullOrWhiteSpace(kanjiField.Value)
+                    && (settings.Overwrite || mnField == null || string.IsNullOrWhiteSpace(mnField.Value));
+            })
             .ToList();
 
         AnsiConsole.MarkupLine($"[green]{cardsNeedingMnemonics.Count} cards need mnemonics.[/]");
@@ -74,8 +77,13 @@ public class RenshuuCommand : Command<Settings>
 
         // Group by kanji to avoid fetching the same mnemonic twice
         var kanjiToNotes = cardsNeedingMnemonics
-            .GroupBy(n => n.Fields["Kanji"].Value)
-            .ToDictionary(g => g.Key, g => g.ToList());
+            .Select(n => {
+                var kanjiField = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, settings.KanjiField)).Value;
+                return (Note: n, Kanji: kanjiField?.Value ?? "");
+            })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Kanji))
+            .GroupBy(x => x.Kanji)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Note).ToList());
 
         // Step 2: Fetch mnemonics from Renshuu
         AnsiConsole.MarkupLine("[bold]Fetching mnemonics from Renshuu...[/]");
@@ -136,7 +144,7 @@ public class RenshuuCommand : Command<Settings>
 
             foreach (var note in notes)
             {
-                var success = await ankiConnector.UpdateNoteAsync(note.NoteId, "Mnemonic", mnemonic.FormattedMnemonic);
+                var success = await ankiConnector.UpdateNoteAsync(note.NoteId, settings.MnemonicField, mnemonic.FormattedMnemonic);
                 if (success)
                 {
                     AnsiConsole.MarkupLine($"[green]Success[/]: Card {note.NoteId} ({kanji}) updated");

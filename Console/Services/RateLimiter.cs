@@ -1,15 +1,10 @@
 namespace Console.Services;
 
-public class RateLimiter
+public class RateLimiter(int requestsPerMinute)
 {
     private readonly SemaphoreSlim Semaphore = new(1, 1);
-    private readonly TimeSpan Delay;
+    private readonly TimeSpan Delay = TimeSpan.FromMinutes(1.0 / requestsPerMinute);
     private DateTime LastRelease = DateTime.MinValue;
-
-    public RateLimiter(int requestsPerMinute)
-    {
-        Delay = TimeSpan.FromMinutes(1.0 / requestsPerMinute);
-    }
 
     public async Task WaitAsync(CancellationToken ct = default)
     {

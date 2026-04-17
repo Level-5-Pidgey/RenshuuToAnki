@@ -19,8 +19,16 @@ public class AnkiConnector
         var request = new AnkiRequest("notesInfo", new { query });
         var response = await PostAsync(request, ct);
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var result = JsonSerializer.Deserialize<NoteInfo[]>(response.RootElement.GetRawText(), options);
-        return result ?? [];
+        var deserializeResult = JsonSerializer.Deserialize<NoteInfo[]>(response.RootElement.GetRawText(), options);
+        if (deserializeResult == null) return [];
+        for (var i = 0; i < deserializeResult.Length; i++)
+        {
+            deserializeResult[i] = deserializeResult[i] with
+            {
+                Fields = new Dictionary<string, NoteField>(deserializeResult[i].Fields, StringComparer.OrdinalIgnoreCase)
+            };
+        }
+        return deserializeResult;
     }
 
     public async Task<bool> UpdateNoteAsync(long noteId, string fieldName, string value, CancellationToken ct = default)
