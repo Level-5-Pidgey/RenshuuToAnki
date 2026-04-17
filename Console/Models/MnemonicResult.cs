@@ -4,8 +4,7 @@ public record MnemonicResult(
     string Kanji,
     string ImageUrl,
     string Text,
-    string Author,
-    int HeartCount)
+    string Author)
 {
     public string FormattedMnemonic =>
         $"<img src=\"{ImageUrl}\"/><br/>{Text}";

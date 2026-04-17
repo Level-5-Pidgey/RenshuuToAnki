@@ -1,90 +1,98 @@
 using System.Net;
-using AngleSharp;
+using System.Text.Json;
 using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
 using Console.Models;
 
-namespace RenshuuMnemonicExtractor.Services;
+namespace Console.Services;
 
 public class RenshuuScraper
 {
-    private readonly HttpClient _httpClient;
-    private readonly string _baseUrl;
-    private readonly string _lookupPath;
-    private readonly IBrowsingContext _context;
+	private readonly HttpClient HttpClient;
+	private readonly string BaseUrl;
+	private readonly string LookupPath;
 
-    public RenshuuScraper(HttpClient httpClient, string baseUrl, string lookupPath)
-    {
-        _httpClient = httpClient;
-        _baseUrl = baseUrl;
-        _lookupPath = lookupPath;
-        _context = BrowsingContext.New();
-    }
+	public RenshuuScraper(HttpClient httpClient, string baseUrl, string lookupPath)
+	{
+		HttpClient = httpClient;
+		BaseUrl = baseUrl;
+		LookupPath = lookupPath;
+	}
 
-    public async Task<MnemonicResult?> ScrapeAsync(string kanji, CancellationToken ct = default)
-    {
-        var html = await FetchPageAsync(kanji, ct);
-        if (string.IsNullOrEmpty(html)) return null;
+	public async Task<MnemonicResult?> ScrapeAsync(string kanji, CancellationToken ct = default)
+	{
+		var json = await FetchPageAsync(kanji, ct);
+		if (string.IsNullOrEmpty(json)) return null;
 
-        var document = await _context.OpenAsync(req => req.Content(html), ct);
-        var boxes = document.QuerySelectorAll("div.mnemonic_box");
+		// Parse JSON to extract HTML from stext_kanji field
+		using var doc = JsonDocument.Parse(json);
+		var htmlElement = doc.RootElement.GetProperty("stext_kanji");
+		var rawHtml = htmlElement.GetString() ?? "";
+		if (string.IsNullOrEmpty(rawHtml)) return null;
 
-        var mnemonics = boxes
-            .Select(box => ParseMnemonicBox(box, kanji))
-            .Where(m => m != null)
-            .Cast<MnemonicResult>()
-            .ToList();
+		// Unescape JSON-encoded quotes and other escape sequences
+		var cleanHtml = rawHtml
+			.Replace("\\\"", "\"")
+			.Replace("\\n", "\n")
+			.Replace("\\t", "\t");
 
-        return mnemonics.Count == 0 ? null : mnemonics.OrderByDescending(m => m.HeartCount).First();
-    }
+		var parser = new HtmlParser();
+		var document = await parser.ParseDocumentAsync(cleanHtml, ct);
 
-    private async Task<string?> FetchPageAsync(string kanji, CancellationToken ct)
-    {
-        var url = $"{_baseUrl}{_lookupPath}";
-        var content = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["kanji_japanese"] = kanji,
-            ["kword_filter"] = "n1",
-            ["br_dark"] = "1"
-        });
+		var boxes = document.QuerySelectorAll("div.mnemonic_box");
 
-        for (int attempt = 0; attempt < 2; attempt++)
-        {
-            try
-            {
-                var response = await _httpClient.PostAsync(url, content, ct);
-                if (response.StatusCode == HttpStatusCode.NotFound) return null;
-                if (!response.IsSuccessStatusCode)
-                {
-                    if (attempt == 0) await Task.Delay(1000, ct);
-                    continue;
-                }
-                return await response.Content.ReadAsStringAsync(ct);
-            }
-            catch (HttpRequestException) when (attempt == 0)
-            {
-                await Task.Delay(1000, ct);
-            }
-        }
-        return null;
-    }
+		return boxes
+			.Select(box => ParseMnemonicBox(box, kanji))
+			.Where(m => m != null)
+			.Cast<MnemonicResult>()
+			.FirstOrDefault();
+	}
 
-    private MnemonicResult? ParseMnemonicBox(IElement box, string kanji)
-    {
-        var heartSpan = box.QuerySelector("span[id^=\"suki_mn\"]");
-        if (heartSpan == null) return null;
+	private async Task<string?> FetchPageAsync(string kanji, CancellationToken ct)
+	{
+		var url = $"{BaseUrl}{LookupPath}";
+		var content = new FormUrlEncodedContent(new Dictionary<string, string>
+		{
+			["kanji_japanese"] = kanji,
+			["kword_filter"] = "n1",
+			["br_dark"] = "1"
+		});
 
-        var heartText = heartSpan.TextContent?.Trim() ?? "0";
-        if (!int.TryParse(heartText, out var heartCount)) return null;
+		for (int attempt = 0; attempt < 2; attempt++)
+		{
+			try
+			{
+				var response = await HttpClient.PostAsync(url, content, ct);
+				if (response.StatusCode == HttpStatusCode.NotFound) return null;
+				if (!response.IsSuccessStatusCode)
+				{
+					if (attempt == 0) await Task.Delay(1000, ct);
+					continue;
+				}
 
-        var imgEl = box.QuerySelector("div[id^=\"mnimg_\"] img");
-        var imageUrl = imgEl?.GetAttribute("src") ?? "";
+				return await response.Content.ReadAsStringAsync(ct);
+			}
+			catch (HttpRequestException) when (attempt == 0)
+			{
+				await Task.Delay(1000, ct);
+			}
+		}
 
-        var textEl = box.QuerySelector("div[id^=\"mnemonic_\"]");
-        var text = textEl?.InnerHtml ?? "";
+		return null;
+	}
 
-        var authorEl = box.QuerySelector("div.indent a[href^=\"/me/\"]");
-        var author = authorEl?.TextContent ?? "";
+	private MnemonicResult? ParseMnemonicBox(IElement box, string kanji)
+	{
+		var imgEl = box.QuerySelector("div[id^=\"mnimg_\"] img");
+		var imageUrl = imgEl?.GetAttribute("src") ?? "";
 
-        return new MnemonicResult(kanji, imageUrl, text, author, heartCount);
-    }
+		var textEl = box.QuerySelector("div[id^=\"mnemonic_\"]");
+		var text = textEl?.InnerHtml ?? "";
+
+		// The author link is nested deeper: div.grow > div.indent > span.little > a[href$="/me/N"]
+		var authorEl = box.QuerySelector("a[href*=\"/me/\"]");
+		var author = authorEl?.TextContent ?? "";
+
+		return new MnemonicResult(kanji, imageUrl, text, author);
+	}
 }
