@@ -1,4 +1,4 @@
-using RenshuuMnemonicExtractor;
+using Console;
 
 namespace Test;
 
@@ -9,10 +9,13 @@ public class SettingsTests
     {
         var settings = new Settings();
 
-        Assert.That(settings.Query, Is.EqualTo("tag:Languages::Japanese::Writing::Kanji"));
-        Assert.That(settings.AnkiConnectUrl, Is.EqualTo("http://localhost:8765"));
-        Assert.That(settings.RequestsPerMinute, Is.EqualTo(120));
-        Assert.That(settings.ReadOnly, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings.Query, Is.EqualTo("tag:Languages::Japanese::Writing::Kanji"));
+            Assert.That(settings.AnkiConnectUrl, Is.EqualTo("http://localhost:8765"));
+            Assert.That(settings.RequestsPerMinute, Is.EqualTo(120));
+            Assert.That(settings.ReadOnly, Is.True);
+        });
     }
 
     [Test]
@@ -25,9 +28,12 @@ public class SettingsTests
             readOnly: false
         );
 
-        Assert.That(settings.Query, Is.EqualTo("deck:Kanji"));
-        Assert.That(settings.AnkiConnectUrl, Is.EqualTo("http://localhost:9999"));
-        Assert.That(settings.RequestsPerMinute, Is.EqualTo(60));
-        Assert.That(settings.ReadOnly, Is.False);
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings.Query, Is.EqualTo("deck:Kanji"));
+            Assert.That(settings.AnkiConnectUrl, Is.EqualTo("http://localhost:9999"));
+            Assert.That(settings.RequestsPerMinute, Is.EqualTo(60));
+            Assert.That(settings.ReadOnly, Is.False);
+        });
     }
 }

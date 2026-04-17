@@ -1,4 +1,4 @@
-namespace RenshuuMnemonicExtractor.Models;
+namespace Console.Models;
 
 public record MnemonicResult(
     string Kanji,

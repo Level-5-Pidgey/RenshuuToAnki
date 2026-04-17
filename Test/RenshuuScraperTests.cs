@@ -1,7 +1,6 @@
 using System.Net;
 using Moq;
 using Moq.Protected;
-using RenshuuMnemonicExtractor.Models;
 using RenshuuMnemonicExtractor.Services;
 
 namespace Test;
@@ -17,15 +16,17 @@ public class RenshuuScraperTests
     [Test]
     public async Task ScrapeAsync_ParsesMnemonicFromHtml()
     {
-        var html = @"<!DOCTYPE html>
-<html><body>
-<div class=""mnemonic_box"">
-    <span id=""suki_mn_123"">287</span>
-    <div id=""mnimg_456""><img src=""https://iserve.renshuu.org/img/mns/278.svg"" /></div>
-    <div id=""mnemonic_789"">Your <strong>little sister</strong> isn't a woman yet...</div>
-    <div class=""indent""><a href=""/me/Jessica_Ilha"">Jessica_Ilha</a></div>
-</div>
-</body></html>";
+        const string html = """
+                            <!DOCTYPE html>
+                            <html><body>
+                            <div class="mnemonic_box">
+                                <span id="suki_mn_123">287</span>
+                                <div id="mnimg_456"><img src="https://iserve.renshuu.org/img/mns/278.svg" /></div>
+                                <div id="mnemonic_789">Your <strong>little sister</strong> isn't a woman yet...</div>
+                                <div class="indent"><a href="/me/Jessica_Ilha">Jessica_Ilha</a></div>
+                            </div>
+                            </body></html>
+                            """;
 
         var handlerMock = new Mock<HttpMessageHandler>();
         handlerMock
@@ -44,30 +45,35 @@ public class RenshuuScraperTests
         var result = await scraper.ScrapeAsync("母", CancellationToken.None);
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.Kanji, Is.EqualTo("母"));
-        Assert.That(result.ImageUrl, Is.EqualTo("https://iserve.renshuu.org/img/mns/278.svg"));
-        Assert.That(result.HeartCount, Is.EqualTo(287));
-        Assert.That(result.Author, Is.EqualTo("Jessica_Ilha"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result!.Kanji, Is.EqualTo("母"));
+            Assert.That(result.ImageUrl, Is.EqualTo("https://iserve.renshuu.org/img/mns/278.svg"));
+            Assert.That(result.HeartCount, Is.EqualTo(287));
+            Assert.That(result.Author, Is.EqualTo("Jessica_Ilha"));
+        });
     }
 
     [Test]
     public async Task ScrapeAsync_SelectsHighestHeartCountMnemonic()
     {
-        var html = @"<!DOCTYPE html>
-<html><body>
-<div class=""mnemonic_box"">
-    <span id=""suki_mn_1"">50</span>
-    <div id=""mnimg_1""><img src=""https://example.com/1.svg"" /></div>
-    <div id=""mnemonic_1"">Low hearts</div>
-    <div class=""indent""><a href=""/me/Author1"">Author1</a></div>
-</div>
-<div class=""mnemonic_box"">
-    <span id=""suki_mn_2"">500</span>
-    <div id=""mnimg_2""><img src=""https://example.com/2.svg"" /></div>
-    <div id=""mnemonic_2"">High hearts</div>
-    <div class=""indent""><a href=""/me/Author2"">Author2</a></div>
-</div>
-</body></html>";
+        const string html = """
+                            <!DOCTYPE html>
+                            <html><body>
+                            <div class="mnemonic_box">
+                                <span id="suki_mn_1">50</span>
+                                <div id="mnimg_1"><img src="https://example.com/1.svg" /></div>
+                                <div id="mnemonic_1">Low hearts</div>
+                                <div class="indent"><a href="/me/Author1">Author1</a></div>
+                            </div>
+                            <div class="mnemonic_box">
+                                <span id="suki_mn_2">500</span>
+                                <div id="mnimg_2"><img src="https://example.com/2.svg" /></div>
+                                <div id="mnemonic_2">High hearts</div>
+                                <div class="indent"><a href="/me/Author2">Author2</a></div>
+                            </div>
+                            </body></html>
+                            """;
 
         var handlerMock = new Mock<HttpMessageHandler>();
         handlerMock
@@ -86,8 +92,11 @@ public class RenshuuScraperTests
         var result = await scraper.ScrapeAsync("test", CancellationToken.None);
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.HeartCount, Is.EqualTo(500));
-        Assert.That(result.Text, Is.EqualTo("High hearts"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result!.HeartCount, Is.EqualTo(500));
+            Assert.That(result.Text, Is.EqualTo("High hearts"));
+        });
     }
 
     [Test]

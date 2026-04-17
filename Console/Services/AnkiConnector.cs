@@ -1,17 +1,17 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace RenshuuMnemonicExtractor.Services;
+namespace Console.Services;
 
 public class AnkiConnector
 {
-    private readonly HttpClient _httpClient;
-    private readonly string _ankiConnectUrl;
+    private readonly HttpClient HttpClient;
+    private readonly string AnkiConnectUrl;
 
     public AnkiConnector(HttpClient httpClient, string ankiConnectUrl)
     {
-        _httpClient = httpClient;
-        _ankiConnectUrl = ankiConnectUrl;
+        HttpClient = httpClient;
+        AnkiConnectUrl = ankiConnectUrl;
     }
 
     public async Task<NoteInfo[]> NotesInfoAsync(string query, CancellationToken ct = default)
@@ -30,7 +30,7 @@ public class AnkiConnector
             note = new { id = noteId, fields = new { @field = value } }
         });
 
-        for (int attempt = 0; attempt < 2; attempt++)
+        for (var attempt = 0; attempt < 2; attempt++)
         {
             try
             {
@@ -44,13 +44,14 @@ public class AnkiConnector
                 await Task.Delay(500, ct);
             }
         }
+
         return false;
     }
 
     private async Task<JsonDocument> PostAsync(AnkiRequest request, CancellationToken ct)
     {
-        var response = await _httpClient.PostAsJsonAsync(
-            $"{_ankiConnectUrl}/",
+        var response = await HttpClient.PostAsJsonAsync(
+            $"{AnkiConnectUrl}/",
             request,
             cancellationToken: ct);
         response.EnsureSuccessStatusCode();
@@ -59,7 +60,7 @@ public class AnkiConnector
     }
 }
 
-internal record AnkiRequest(string action, object? @params = null, int version = 6);
+internal record AnkiRequest(string Action, object? Params = null, int Version = 6);
 
 public record NoteInfo(
     long NoteId,

@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using Spectre.Console.Cli;
 
-namespace RenshuuMnemonicExtractor;
+namespace Console;
 
 public class Settings : CommandSettings
 {

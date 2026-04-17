@@ -1,4 +1,4 @@
-using RenshuuMnemonicExtractor.Models;
+using Console.Models;
 
 namespace Test;
 
@@ -15,11 +15,14 @@ public class MnemonicResultTests
             HeartCount: 287
         );
 
-        Assert.That(result.Kanji, Is.EqualTo("母"));
-        Assert.That(result.ImageUrl, Is.EqualTo("https://iserve.renshuu.org/img/mns/278.svg"));
-        Assert.That(result.Text, Is.EqualTo("Your <strong>little sister</strong> isn't a woman yet..."));
-        Assert.That(result.Author, Is.EqualTo("Jessica_Ilha"));
-        Assert.That(result.HeartCount, Is.EqualTo(287));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Kanji, Is.EqualTo("母"));
+            Assert.That(result.ImageUrl, Is.EqualTo("https://iserve.renshuu.org/img/mns/278.svg"));
+            Assert.That(result.Text, Is.EqualTo("Your <strong>little sister</strong> isn't a woman yet..."));
+            Assert.That(result.Author, Is.EqualTo("Jessica_Ilha"));
+            Assert.That(result.HeartCount, Is.EqualTo(287));
+        });
     }
 
     [Test]

@@ -1,4 +1,4 @@
-using RenshuuMnemonicExtractor.Services;
+using Console.Services;
 
 namespace Test;
 

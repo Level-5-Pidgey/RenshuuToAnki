@@ -1,7 +1,7 @@
 using System.Net;
 using AngleSharp;
 using AngleSharp.Dom;
-using RenshuuMnemonicExtractor.Models;
+using Console.Models;
 
 namespace RenshuuMnemonicExtractor.Services;
 

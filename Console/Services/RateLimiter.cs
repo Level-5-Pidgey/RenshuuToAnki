@@ -1,31 +1,31 @@
-namespace RenshuuMnemonicExtractor.Services;
+namespace Console.Services;
 
 public class RateLimiter
 {
-    private readonly SemaphoreSlim _semaphore = new(1, 1);
-    private readonly TimeSpan _delay;
-    private DateTime _lastRelease = DateTime.MinValue;
+    private readonly SemaphoreSlim Semaphore = new(1, 1);
+    private readonly TimeSpan Delay;
+    private DateTime LastRelease = DateTime.MinValue;
 
     public RateLimiter(int requestsPerMinute)
     {
-        _delay = TimeSpan.FromMinutes(1.0 / requestsPerMinute);
+        Delay = TimeSpan.FromMinutes(1.0 / requestsPerMinute);
     }
 
     public async Task WaitAsync(CancellationToken ct = default)
     {
-        await _semaphore.WaitAsync(ct);
+        await Semaphore.WaitAsync(ct);
         try
         {
-            var elapsed = DateTime.Now - _lastRelease;
-            if (elapsed < _delay)
+            var elapsed = DateTime.Now - LastRelease;
+            if (elapsed < Delay)
             {
-                await Task.Delay(_delay - elapsed, ct);
+                await Task.Delay(Delay - elapsed, ct);
             }
         }
         finally
         {
-            _lastRelease = DateTime.Now;
-            _semaphore.Release();
+            LastRelease = DateTime.Now;
+            Semaphore.Release();
         }
     }
 }

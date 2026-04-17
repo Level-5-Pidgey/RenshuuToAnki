@@ -1,8 +1,7 @@
 using System.Net;
 using Moq;
 using Moq.Protected;
-using RenshuuMnemonicExtractor.Services;
-using System.Text.Json;
+using Console.Services;
 
 namespace Test;
 
@@ -49,8 +48,11 @@ public class AnkiConnectorTests
         var result = await connector.NotesInfoAsync("deck:Kanji");
 
         Assert.That(result.Length, Is.EqualTo(1));
-        Assert.That(result[0].NoteId, Is.EqualTo(1502298033753));
-        Assert.That(result[0].Fields["Front"].Value, Is.EqualTo("内容"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result[0].NoteId, Is.EqualTo(1502298033753));
+            Assert.That(result[0].Fields["Front"].Value, Is.EqualTo("内容"));
+        });
     }
 
     [Test]
@@ -104,7 +106,10 @@ public class AnkiConnectorTests
         var connector = CreateConnector(handlerMock);
         var result = await connector.UpdateNoteAsync(123, "Mnemonic", "text");
 
-        Assert.That(result, Is.True);
-        Assert.That(callCount, Is.EqualTo(2));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result, Is.True);
+            Assert.That(callCount, Is.EqualTo(2));
+        });
     }
 }

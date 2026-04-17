@@ -1,5 +1,6 @@
-using RenshuuMnemonicExtractor;
-using RenshuuMnemonicExtractor.Models;
+using Console;
+using Console.Models;
+using Console.Services;
 using RenshuuMnemonicExtractor.Services;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -31,10 +32,10 @@ public class RenshuuCommand : Command<Settings>
         return 0;
     }
 
-    private async Task ExecuteAsync(Settings settings, AnkiConnector ankiConnector, RenshuuScraper scraper, RateLimiter rateLimiter)
+    private static async Task ExecuteAsync(Settings settings, AnkiConnector ankiConnector, RenshuuScraper scraper, RateLimiter rateLimiter)
     {
         // Step 1: Discover cards
-        AnsiConsole.MarkupLine("[bold]Step 1: Discovering cards...[/]");
+        AnsiConsole.MarkupLine("[bold]Discovering cards...[/]");
         NoteInfo[] allNotes;
         try
         {
@@ -77,7 +78,7 @@ public class RenshuuCommand : Command<Settings>
             .ToDictionary(g => g.Key, g => g.ToList());
 
         // Step 2: Fetch mnemonics from Renshuu
-        AnsiConsole.MarkupLine("[bold]Step 2: Fetching mnemonics from Renshuu...[/]");
+        AnsiConsole.MarkupLine("[bold]Fetching mnemonics from Renshuu...[/]");
 
         var mnemonicMap = new Dictionary<string, MnemonicResult>();
 
@@ -97,11 +98,11 @@ public class RenshuuCommand : Command<Settings>
                     if (mnemonic != null)
                     {
                         mnemonicMap[kanji] = mnemonic with { Kanji = kanji };
-                        AnsiConsole.MarkupLine($"[green]✓[/] {kanji}: {mnemonic.HeartCount} hearts by {mnemonic.Author}");
+                        AnsiConsole.MarkupLine($"[green]Found[/]: {kanji} {mnemonic.HeartCount} hearts by {mnemonic.Author}");
                     }
                     else
                     {
-                        AnsiConsole.MarkupLine($"[yellow]⚠[/] {kanji}: No mnemonics found");
+                        AnsiConsole.MarkupLine($"[yellow]Warning[/]: {kanji}: No mnemonics found");
                     }
                 }
             });
@@ -125,7 +126,7 @@ public class RenshuuCommand : Command<Settings>
         }
 
         // Step 3: Update Anki cards
-        AnsiConsole.MarkupLine("[bold]Step 3: Updating Anki cards...[/]");
+        AnsiConsole.MarkupLine("[bold]Updating Anki cards...[/]");
         var updated = 0;
         var failed = 0;
 
@@ -138,12 +139,12 @@ public class RenshuuCommand : Command<Settings>
                 var success = await ankiConnector.UpdateNoteAsync(note.NoteId, "Mnemonic", mnemonic.FormattedMnemonic);
                 if (success)
                 {
-                    AnsiConsole.MarkupLine($"[green]✓[/] Card {note.NoteId} ({kanji}) updated");
+                    AnsiConsole.MarkupLine($"[green]Success[/]: Card {note.NoteId} ({kanji}) updated");
                     updated++;
                 }
                 else
                 {
-                    AnsiConsole.MarkupLine($"[red]✗[/] Card {note.NoteId} ({kanji}) failed");
+                    AnsiConsole.MarkupLine($"[red]Error[/]: Card {note.NoteId} ({kanji}) failed");
                     failed++;
                 }
             }
