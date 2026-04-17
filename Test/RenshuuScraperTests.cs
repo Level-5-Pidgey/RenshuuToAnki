@@ -209,6 +209,38 @@ public class RenshuuScraperTests
 	}
 
 	[Test]
+	public async Task ScrapeFullAsync_IgnoresNoneReadings()
+	{
+		// When a reading doesn't exist, Renshuu returns "(none)" as the reading text
+		var jsonResponse = $$"""
+			{"stext_kanji": "Kunyomi: <span class=\"grey\"><span data-dj='1' class=\"lnk\" onclick=\"dJ('k','r=(none)' )\">(none)</span></span><sub class='little'>x</sub><br/>Onyomi: <span class=\"grey\"><span data-dj='1' class=\"lnk\" onclick=\"dJ('k','r=マン' )\">マン</span></span><sub class='little'>小</sub><br/>Strokes: 3<br/>"}
+			""";
+
+		var handlerMock = new Mock<HttpMessageHandler>();
+		handlerMock.Protected()
+			.Setup<Task<HttpResponseMessage>>(
+				"SendAsync",
+				ItExpr.IsAny<HttpRequestMessage>(),
+				ItExpr.IsAny<CancellationToken>())
+			.ReturnsAsync(new HttpResponseMessage
+			{
+				StatusCode = HttpStatusCode.OK,
+				Content = new StringContent(jsonResponse)
+			});
+
+		var scraper = CreateScraper(handlerMock);
+		var result = await scraper.ScrapeFullAsync("万", CancellationToken.None);
+
+		Assert.That(result, Is.Not.Null);
+		Assert.Multiple(() =>
+		{
+			Assert.That(result!.Kunyomi.Count, Is.EqualTo(0));
+			Assert.That(result.Onyomi.Count, Is.EqualTo(1));
+			Assert.That(result.Onyomi[0].Text, Is.EqualTo("マン"));
+		});
+	}
+
+	[Test]
 	public async Task ScrapeFullAsync_ParsesStrokesAndRadical()
 	{
 		var jsonResponse = $$"""

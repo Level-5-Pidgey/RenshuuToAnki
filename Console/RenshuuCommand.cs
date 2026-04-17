@@ -1,3 +1,4 @@
+using System.Text;
 using Console.Models;
 using Console.Services;
 using Spectre.Console;
@@ -170,8 +171,14 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 
 							if (!string.IsNullOrEmpty(value))
 							{
-								var display = value.Length > 40 ? value[..40] + "..." : value;
-								fieldInfos.Add($"{dest}: {display}");
+								var valLen = Math.Min(value.Length, 40);
+								var truncated = new StringBuilder(value[..Math.Min(value.Length, 40)]);
+								if (valLen < value.Length)
+								{
+									truncated.Append('…');
+								}
+								
+								fieldInfos.Add($"{dest}: {truncated.ToString()}");
 							}
 						}
 

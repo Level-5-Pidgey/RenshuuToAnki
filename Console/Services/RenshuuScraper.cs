@@ -189,6 +189,7 @@ public class RenshuuScraper
 			for (int i = 0; i < lnkMatches.Count; i++)
 			{
 				var text = lnkMatches[i].Groups[1].Value;
+				if (text.Equals("(none)", StringComparison.OrdinalIgnoreCase)) continue;
 				var level = i < lvlMatches.Count ? lvlMatches[i].Groups[1].Value : "";
 				results.Add(new Reading(text, level));
 			}
