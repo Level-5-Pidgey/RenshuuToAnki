@@ -146,7 +146,37 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 						}
 
 						kanjiResultMap[kanji] = result;
-						AnsiConsole.MarkupLine($"[green]Found[/]: {kanji}");
+
+						var fieldInfos = new List<string>();
+						foreach (var (source, dest) in sourceToDest)
+						{
+							if (source.Equals("kanji", StringComparison.OrdinalIgnoreCase))
+								continue;
+
+							var value = source.ToLowerInvariant() switch
+							{
+								"meaning" => result.Meaning,
+								"kunyomi" => string.Join(", ", result.Kunyomi.Select(r => r.Text)),
+								"onyomi" => string.Join(", ", result.Onyomi.Select(r => r.Text)),
+								"radical" => result.Radical?.Character,
+								"strokes" => result.Strokes.ToString(),
+								"mnemonic" => result.Mnemonic?.Text != null
+									? System.Text.RegularExpressions.Regex.Replace(result.Mnemonic.Text, "<[^>]*>", "")
+									: null,
+								"jlpt" => result.Jlpt,
+								"kentei" => result.Kentei,
+								_ => null
+							};
+
+							if (!string.IsNullOrEmpty(value))
+							{
+								var display = value.Length > 40 ? value[..40] + "..." : value;
+								fieldInfos.Add($"{dest}: {display}");
+							}
+						}
+
+						var info = fieldInfos.Count > 0 ? $" ({string.Join(", ", fieldInfos)})" : "";
+						AnsiConsole.MarkupLine($"[green]Found[/]: {kanji}{info}");
 					}
 					else
 					{
