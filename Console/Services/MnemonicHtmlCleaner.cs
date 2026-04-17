@@ -9,7 +9,7 @@ public partial class MnemonicHtmlCleaner(string? kanjiClass = null)
 		"#f5c10f", 
 		"#aa1aff", 
 		"#31a0f6",
-		"#f54e0f",
+		"#27c200",
 		"#0ff54e"
 	];
 
@@ -37,7 +37,7 @@ public partial class MnemonicHtmlCleaner(string? kanjiClass = null)
 	[GeneratedRegex(@"<div[^>]*\bmn_dpiece\b[^>]*>([^<]{1,3})</div>", RegexOptions.IgnoreCase, "en-AU")]
 	private static partial Regex MnDpieceTextFallbackRegex();
 
-	[GeneratedRegex(@"stroke:#000", RegexOptions.IgnoreCase, "en-AU")]
+	[GeneratedRegex(@"(?:stroke[=:])""?#000""?", RegexOptions.IgnoreCase, "en-AU")]
 	private static partial Regex SvgStrokeColorRegex();
 
 	[GeneratedRegex(@"<svg[^>]*>", RegexOptions.IgnoreCase, "en-AU")]
@@ -182,6 +182,9 @@ public partial class MnemonicHtmlCleaner(string? kanjiClass = null)
 		return result.Trim();
 	}
 
+	private static readonly Regex WidthAttrRegex = new(@"width=""\d+(?:\.\d+)?px""", RegexOptions.IgnoreCase);
+	private static readonly Regex HeightAttrRegex = new(@"height=""\d+(?:\.\d+)?px""", RegexOptions.IgnoreCase);
+
 	private static string AddDefaultSvgAttributes(string svgContent)
 	{
 		return SvgTagRegex().Replace(svgContent, match =>
@@ -193,14 +196,22 @@ public partial class MnemonicHtmlCleaner(string? kanjiClass = null)
 				return svgTag;
 			}
 
-			var openingPortion = svgTag[..(closingBracket + 1)];
+			var openingPortion = svgTag[..closingBracket];
 			var attributes = "";
 
-			if (!openingPortion.Contains("width="))
+			if (WidthAttrRegex.IsMatch(openingPortion))
+			{
+				openingPortion = WidthAttrRegex.Replace(openingPortion, @"width=""24px""", 1);
+			}
+			else
 			{
 				attributes += @" width=""24px""";
 			}
-			if (!openingPortion.Contains("height="))
+			if (HeightAttrRegex.IsMatch(openingPortion))
+			{
+				openingPortion = HeightAttrRegex.Replace(openingPortion, @"height=""24px""", 1);
+			}
+			else
 			{
 				attributes += @" height=""24px""";
 			}
