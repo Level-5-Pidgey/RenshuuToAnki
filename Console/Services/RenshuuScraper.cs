@@ -60,6 +60,9 @@ public class RenshuuScraper
 			}
 		}
 
+		var jlpt = ParseJlpt(document);
+		var kentei = ParseKentei(document);
+
 		return new KanjiResult(
 			Kanji: kanji,
 			ImageUrl: "",
@@ -69,8 +72,8 @@ public class RenshuuScraper
 			Radical: radical,
 			Strokes: strokes,
 			Mnemonic: mnemonic,
-			Jlpt: null,
-			Kentei: null);
+			Jlpt: jlpt,
+			Kentei: kentei);
 	}
 
 	public async Task<MnemonicResult?> ScrapeAsync(string kanji, CancellationToken ct = default)
@@ -181,7 +184,7 @@ public class RenshuuScraper
 		{
 			// Match ALL readings in this line
 			var lnkMatches = System.Text.RegularExpressions.Regex.Matches(line, @"class=""lnk""[^>]*>([^<]+)</span>");
-			var lvlMatches = System.Text.RegularExpressions.Regex.Matches(line, @"<sub class='little'>([^<]+)</sub>");
+			var lvlMatches = System.Text.RegularExpressions.Regex.Matches(line, @"<sub class='little' ?>([^<]+)</sub>");
 
 			for (int i = 0; i < lnkMatches.Count; i++)
 			{
@@ -208,5 +211,33 @@ public class RenshuuScraper
 		if (!radicalMatch.Success) return null;
 		var names = radicalMatch.Groups[2].Value.Split(',').Select(n => n.Trim()).ToList();
 		return new RadicalInfo(radicalMatch.Groups[1].Value, names);
+	}
+
+	private string? ParseJlpt(IDocument document)
+	{
+		var containers = document.QuerySelectorAll("div.pure-u-1-4");
+		foreach (var c in containers)
+		{
+			if (c.TextContent.Contains("JLPT:"))
+			{
+				var match = System.Text.RegularExpressions.Regex.Match(c.TextContent, @"JLPT:\s*(N[1-5])");
+				return match.Success ? match.Groups[1].Value : null;
+			}
+		}
+		return null;
+	}
+
+	private string? ParseKentei(IDocument document)
+	{
+		var containers = document.QuerySelectorAll("div.pure-u-1-4");
+		foreach (var c in containers)
+		{
+			if (c.TextContent.Contains("Kanji Kentei:"))
+			{
+				var match = System.Text.RegularExpressions.Regex.Match(c.TextContent, @"Kanji Kentei:\s*([\d１-５]+級)");
+				return match.Success ? match.Groups[1].Value : null;
+			}
+		}
+		return null;
 	}
 }

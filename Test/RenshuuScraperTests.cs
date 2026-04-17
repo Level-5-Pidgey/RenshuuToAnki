@@ -271,4 +271,56 @@ public class RenshuuScraperTests
 			Assert.That(result.Mnemonic.Author, Is.EqualTo("Author1"));
 		});
 	}
+
+	[Test]
+	public async Task ScrapeFullAsync_ParsesJlpt()
+	{
+		var jsonResponse = $$"""
+			{"stext_kanji": "<div class='pure-u-1-4'>JLPT: N3</div>"}
+			""";
+
+		var handlerMock = new Mock<HttpMessageHandler>();
+		handlerMock.Protected()
+			.Setup<Task<HttpResponseMessage>>(
+				"SendAsync",
+				ItExpr.IsAny<HttpRequestMessage>(),
+				ItExpr.IsAny<CancellationToken>())
+			.ReturnsAsync(new HttpResponseMessage
+			{
+				StatusCode = HttpStatusCode.OK,
+				Content = new StringContent(jsonResponse)
+			});
+
+		var scraper = CreateScraper(handlerMock);
+		var result = await scraper.ScrapeFullAsync("万", CancellationToken.None);
+
+		Assert.That(result, Is.Not.Null);
+		Assert.That(result!.Jlpt, Is.EqualTo("N3"));
+	}
+
+	[Test]
+	public async Task ScrapeFullAsync_ParsesKentei()
+	{
+		var jsonResponse = $$"""
+			{"stext_kanji": "<div class='pure-u-1-4'>Kanji Kentei: 2級</div>"}
+			""";
+
+		var handlerMock = new Mock<HttpMessageHandler>();
+		handlerMock.Protected()
+			.Setup<Task<HttpResponseMessage>>(
+				"SendAsync",
+				ItExpr.IsAny<HttpRequestMessage>(),
+				ItExpr.IsAny<CancellationToken>())
+			.ReturnsAsync(new HttpResponseMessage
+			{
+				StatusCode = HttpStatusCode.OK,
+				Content = new StringContent(jsonResponse)
+			});
+
+		var scraper = CreateScraper(handlerMock);
+		var result = await scraper.ScrapeFullAsync("万", CancellationToken.None);
+
+		Assert.That(result, Is.Not.Null);
+		Assert.That(result!.Kentei, Is.EqualTo("2級"));
+	}
 }
