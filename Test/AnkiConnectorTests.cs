@@ -179,10 +179,10 @@ public class AnkiConnectorTests
 				StatusCode = HttpStatusCode.OK,
 				Content = new StringContent("{\"error\":null,\"result\":[true]}")
 			})
-			.Callback<HttpRequestMessage, CancellationToken>((req, _) =>
+			.Callback<HttpRequestMessage, CancellationToken>((req, ct) =>
 			{
-				var body = req.Content.ReadAsStringAsync().Result;
-				using var doc = System.Text.Json.JsonDocument.Parse(body);
+				var body = req.Content?.ReadAsStringAsync(ct).Result;
+				using var doc = System.Text.Json.JsonDocument.Parse(body ?? string.Empty);
 				capturedNoteId = doc.RootElement.GetProperty("params").GetProperty("note").GetProperty("id").GetInt64();
 				var fields = doc.RootElement.GetProperty("params").GetProperty("note").GetProperty("fields");
 				capturedFields = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(fields.GetRawText());
