@@ -101,4 +101,136 @@ public class MnemonicHtmlCleanerTests
 		Assert.That(result, Does.Contain("spreading his arms"));
 		Assert.That(result, Does.Contain("wide to hold something"));
 	}
+
+	[Test]
+	public void Create_RequiresIndexPlaceholder()
+	{
+		var ex = Assert.Throws<ArgumentException>(() => MnemonicHtmlCleaner.Create("kanji"));
+		Assert.That(ex!.Message, Does.Contain("{index}"));
+	}
+
+	[Test]
+	public void Create_AcceptsValidIndexPlaceholder()
+	{
+		var cleaner = MnemonicHtmlCleaner.Create("kanji-{index}");
+		const string input = """<span data-klook="">人</span>""";
+
+		var result = cleaner.Clean(input);
+
+		Assert.That(result, Does.Contain(@"class=""kanji-0"""));
+	}
+
+	[Test]
+	public void Create_AcceptsIndexPlaceholderAtStart()
+	{
+		var cleaner = MnemonicHtmlCleaner.Create("{index}-kanji");
+		const string input = """<span data-klook="">人</span>""";
+
+		var result = cleaner.Clean(input);
+
+		Assert.That(result, Does.Contain(@"class=""0-kanji"""));
+	}
+
+	[Test]
+	public void Clean_AssignsSequentialIndicesWithIndexPlaceholder()
+	{
+		var cleaner = MnemonicHtmlCleaner.Create("kanji-{index}");
+		const string input = """<span data-klook="">人</span><span data-klook="">大</span><span data-klook="">一</span>""";
+
+		var result = cleaner.Clean(input);
+
+		Assert.That(result, Does.Contain(@"class=""kanji-0"""));
+		Assert.That(result, Does.Contain(@"class=""kanji-1"""));
+		Assert.That(result, Does.Contain(@"class=""kanji-2"""));
+	}
+
+	[Test]
+	public void Clean_AssignsSameIndexToSameContent()
+	{
+		var cleaner = new MnemonicHtmlCleaner();
+		const string input = """<span data-klook="">彡</span> first <span data-klook="">大</span> second <span data-klook="">彡</span> third""";
+
+		var result = cleaner.Clean(input);
+
+		// 彡 appears twice but should only use one color
+		var matches = System.Text.RegularExpressions.Regex.Matches(result, @"color=""#fc3199""");
+		Assert.That(matches.Count, Is.EqualTo(2)); // Both 彡 occurrences share color
+	}
+
+	[Test]
+	public void Clean_ConvertsMnDpieceWithDataTipToSpan()
+	{
+		var cleaner = new MnemonicHtmlCleaner();
+		var input = """<div class=" mn_dpiece " data-tip="&nbsp;" onmouseover="hooktip(this,$(this).data('tip'))">マ</div>""";
+
+		var result = cleaner.Clean(input);
+
+		Assert.That(result, Does.Contain("<span color="));
+		Assert.That(result, Does.Contain(">マ</span>"));
+		Assert.That(result, Does.Not.Contains("mn_dpiece"));
+		Assert.That(result, Does.Not.Contains("data-tip"));
+	}
+
+	[Test]
+	public void Clean_ConvertsMnDpieceWithDataTipToStyledSpan()
+	{
+		var cleaner = MnemonicHtmlCleaner.Create("kanji-{index}");
+		const string input = """<div class=" mn_dpiece " data-tip="&nbsp;" onmouseover="hooktip(this,$(this).data('tip'))">マ</div>""";
+
+		var result = cleaner.Clean(input);
+
+		Assert.That(result, Does.Contain(@"class=""kanji-0"">マ</span>"));
+	}
+
+	[Test]
+	public void Clean_ConvertsMnSpieceSvgToSpan()
+	{
+		var cleaner = new MnemonicHtmlCleaner();
+		const string input = """<div class=" mn_dpiece mn_spiece"><svg class="im" width="109px" height="109px" viewBox="4.25 2.25 100.75 106.5" xmlns="http://www.w3.org/2000/svg"><path d="M42.12,14.75" style="fill:none;stroke:#000;stroke-width:3"></path></svg></div>""";
+
+		var result = cleaner.Clean(input);
+
+		Assert.That(result, Does.Contain("<span color="));
+		Assert.That(result, Does.Contain("<svg"));
+		Assert.That(result, Does.Not.Contains("mn_spiece"));
+		Assert.That(result, Does.Not.Contains("mn_dpiece"));
+	}
+
+	[Test]
+	public void Clean_SvgContentGetsUniqueIndex()
+	{
+		var cleaner = MnemonicHtmlCleaner.Create("svg-{index}");
+		const string input = """<div class="mn_spiece"><svg class="im"><path d="M1"></path></svg></div>""";
+
+		var result = cleaner.Clean(input);
+
+		Assert.That(result, Does.Contain("""class="svg-0">"""));
+		Assert.That(result, Does.Contain("<svg"));
+	}
+
+	[Test]
+	public void Clean_PreservesColorOrderWhenContentIsUnique()
+	{
+		var cleaner = new MnemonicHtmlCleaner();
+		const string input = """<span data-klook="">人</span><span data-klook="">大</span><span data-klook="">一</span>""";
+
+		var result = cleaner.Clean(input);
+
+		Assert.That(result, Does.Contain(@"color=""#fc3199""")); // 人
+		Assert.That(result, Does.Contain(@"color=""#f5c10f""")); // 大
+		Assert.That(result, Does.Contain(@"color=""#aa1aff""")); // 一
+	}
+
+	[Test]
+	public void Clean_MnDpieceDataTipSkipsNbspOnlyContent()
+	{
+		var cleaner = new MnemonicHtmlCleaner();
+		// When inner content is just nbsp, the div should be kept as-is
+		const string input = """<div class="mn_dpiece" data-tip="&nbsp;">&nbsp;</div>""";
+
+		var result = cleaner.Clean(input);
+
+		// Should keep original since content is just nbsp
+		Assert.That(result, Does.Contain("mn_dpiece"));
+	}
 }

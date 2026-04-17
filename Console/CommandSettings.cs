@@ -39,7 +39,7 @@ public class CommandSettings : Spectre.Console.Cli.CommandSettings
 	public UpdateMode Mode { get; set; } = UpdateMode.AddEmpty;
 
 	[CommandOption("-c|--mnemonic-kanji-class")]
-	[Description("CSS class name for kanji spans in cleaned mnemonics (e.g., 'kanji'). If empty, preserves original span structure with data-klook removed.")]
+	[Description("CSS class name template for kanji spans in cleaned mnemonics. Must contain '{index}' placeholder (e.g., 'kanji-{index}' or '{index}-kanji'). Each span gets a sequential number. If empty, assigns sequential colors: #fc3199, #f5c10f, #aa1aff, #31a0f6. Use 'none' to keep spans unchanged.")]
 	public string? MnemonicKanjiClass { get; set; }
 
 	[CommandOption("--field")]
