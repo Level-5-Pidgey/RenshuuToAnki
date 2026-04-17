@@ -6,7 +6,7 @@ namespace Console;
 
 public class CommandSettings : Spectre.Console.Cli.CommandSettings
 {
-	internal static readonly string[] SUPPORTED_SOURCES =
+	private static readonly string[] SupportedSources =
 		["kanji", "kunyomi", "onyomi", "radical", "meaning", "strokes", "mnemonic", "jlpt", "kentei"];
 
 	[CommandOption("-q|--query")]
@@ -23,25 +23,20 @@ public class CommandSettings : Spectre.Console.Cli.CommandSettings
 	[DefaultValue(120)]
 	public int RequestsPerMinute { get; set; }
 
-	[CommandOption("-r|--read-only")]
-	[Description("Preview changes without writing to Anki.")]
-	[DefaultValue(false)]
-	public bool ReadOnly { get; set; }
+	public enum UpdateMode
+	{
+		[Description("Preview changes without writing to Anki")]
+		ReadOnly,
+		[Description("Update fields even if they already have values")]
+		Replace,
+		[Description("Only add values to empty fields")]
+		AddEmpty
+	}
 
-	[CommandOption("-k|--kanji-field")]
-	[Description("[DEPRECATED] Use --field kanji=YourFieldName instead.")]
-	[DefaultValue("Kanji")]
-	public string KanjiField { get; set; } = "Kanji";
-
-	[CommandOption("-m|--mnemonic-field")]
-	[Description("[DEPRECATED] Use --field mnemonic=YourFieldName instead.")]
-	[DefaultValue("Mnemonic")]
-	public string MnemonicField { get; set; } = "Mnemonic";
-
-	[CommandOption("-o|--overwrite")]
-	[Description("Overwrite existing field values.")]
-	[DefaultValue(false)]
-	public bool Overwrite { get; set; }
+	[CommandOption("-m|--mode")]
+	[Description("Operation mode: readonly (preview only), replace (update all), addempty (only fill empty fields).")]
+	[DefaultValue(UpdateMode.AddEmpty)]
+	public UpdateMode Mode { get; set; } = UpdateMode.AddEmpty;
 
 	[CommandOption("-c|--mnemonic-kanji-class")]
 	[Description("CSS class name for kanji spans in cleaned mnemonics (e.g., 'kanji'). If empty, preserves original span structure with data-klook removed.")]
@@ -56,15 +51,17 @@ public class CommandSettings : Spectre.Console.Cli.CommandSettings
 		if (RequestsPerMinute <= 0)
 			return ValidationResult.Error($"--rpm must be greater than 0, got {RequestsPerMinute}.");
 
-		if (FieldMap != null)
+		if (FieldMap == null)
 		{
-			foreach (var key in FieldMap.Keys)
+			return ValidationResult.Success();
+		}
+
+		foreach (var key in FieldMap.Keys)
+		{
+			if (!SupportedSources.Contains(key))
 			{
-				if (!SUPPORTED_SOURCES.Contains(key))
-				{
-					return ValidationResult.Error(
-						$"Invalid field source '{key}'. Supported sources: {string.Join(", ", SUPPORTED_SOURCES)}");
-				}
+				return ValidationResult.Error(
+					$"Invalid field source '{key}'. Supported sources: {string.Join(", ", SupportedSources)}");
 			}
 		}
 

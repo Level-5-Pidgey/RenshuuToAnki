@@ -10,14 +10,12 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 	protected override async Task<int> ExecuteAsync(CommandContext context, CommandSettings settings,
 		CancellationToken cancellationToken)
 	{
-		AnsiConsole.MarkupLine("[bold blue]Renshuu Holistic Field Extractor[/]");
+		AnsiConsole.MarkupLine("[bold blue]Renshuu Kanji Dictionary Extractor[/]");
 		AnsiConsole.MarkupLine($"AnkiConnect: {Markup.Escape(settings.AnkiConnectUrl)}");
 		AnsiConsole.MarkupLine($"Query: {Markup.Escape(settings.Query)}");
-		AnsiConsole.MarkupLine($"Read-only: {settings.ReadOnly}");
+		AnsiConsole.MarkupLine($"Mode: {settings.Mode}");
 		AnsiConsole.WriteLine();
 
-		// Determine which mode: new --field or legacy single-field
-		var useNewMode = settings.FieldMap != null && settings.FieldMap.Count > 0;
 		var keyComparer = StringComparer.OrdinalIgnoreCase;
 
 		var httpClient = new HttpClient();
@@ -38,60 +36,39 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 		}
 		catch (Exception ex)
 		{
-			AnsiConsole.MarkupLine($"[bold red]Error:[/] Failed to connect to AnkiConnect: {Markup.Escape(ex.Message)}");
+			AnsiConsole.MarkupLine(
+				$"[bold red]Error:[/] Failed to connect to AnkiConnect: {Markup.Escape(ex.Message)}");
 			return -1;
 		}
-
-		AnsiConsole.MarkupLine($"[green]Found {allNotes.Length} notes.[/]");
 
 		if (allNotes.Length == 0)
 		{
 			AnsiConsole.MarkupLine("[yellow]No notes found. Exiting.[/]");
 			return 0;
 		}
+		AnsiConsole.MarkupLine($"[green]Found {allNotes.Length} notes.[/]");
 
-		// Determine field mappings
-		Dictionary<string, string> sourceToDest;
-		string kanjiField;
-		string? mnemonicField;
-		if (useNewMode)
+		var sourceToDest = new Dictionary<string, string>(settings.FieldMap!, StringComparer.OrdinalIgnoreCase);
+		if (!sourceToDest.TryGetValue("kanji", out var kanjiField))
 		{
-			sourceToDest = new Dictionary<string, string>(settings.FieldMap!, StringComparer.OrdinalIgnoreCase);
-			kanjiField = sourceToDest["kanji"];
-
-			// Pre-flight: check kanji source is mapped
-			if (!sourceToDest.ContainsKey("kanji"))
-			{
-				AnsiConsole.MarkupLine("[bold red]Error:[/] 'kanji' source must be mapped (required to look up the kanji).");
-				AnsiConsole.MarkupLine("[bold yellow]Aborting.[/]");
-				return -1;
-			}
-
-			// Pre-flight: check destination fields exist
-			var existingFields = allNotes.SelectMany(n => n.Fields.Keys)
-				.Distinct(StringComparer.OrdinalIgnoreCase)
-				.ToHashSet(StringComparer.OrdinalIgnoreCase);
-			var missing = sourceToDest.Values
-				.Where(v => !existingFields.Contains(v))
-				.ToList();
-			if (missing.Count > 0)
-			{
-				AnsiConsole.MarkupLine($"[bold red]Error:[/] Missing fields in note type: {string.Join(", ", missing)}.");
-				AnsiConsole.MarkupLine("[bold yellow]Aborting.[/]");
-				return -1;
-			}
-
-			mnemonicField = sourceToDest.GetValueOrDefault("mnemonic");
+			AnsiConsole.MarkupLine(
+				"[bold red]Error:[/] 'kanji' source must be mapped (required to look up the kanji).");
+			AnsiConsole.MarkupLine("[bold yellow]Aborting.[/]");
+			return -1;
 		}
-		else
+		
+		var existingFields = allNotes.SelectMany(n => n.Fields.Keys)
+			.Distinct(StringComparer.OrdinalIgnoreCase)
+			.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var missing = sourceToDest.Values
+			.Where(v => !existingFields.Contains(v))
+			.ToList();
+		if (missing.Count > 0)
 		{
-			kanjiField = settings.KanjiField;
-			mnemonicField = settings.MnemonicField;
-			sourceToDest = new Dictionary<string, string>
-			{
-				["kanji"] = kanjiField,
-				["mnemonic"] = settings.MnemonicField
-			};
+			AnsiConsole.MarkupLine(
+				$"[bold red]Error:[/] Missing fields in note type: {string.Join(", ", missing)}.");
+			AnsiConsole.MarkupLine("[bold yellow]Aborting.[/]");
+			return -1;
 		}
 
 		// Step 2: Filter notes needing updates
@@ -99,12 +76,23 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 			.Where(n =>
 			{
 				var kanjiVal = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, kanjiField)).Value;
-				var needsUpdate = kanjiVal != null && !string.IsNullOrWhiteSpace(kanjiVal.Value);
-				if (!needsUpdate) return false;
-				if (settings.Overwrite) return true;
-				if (mnemonicField == null) return true;
-				var mnVal = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, mnemonicField)).Value;
-				return mnVal == null || string.IsNullOrWhiteSpace(mnVal.Value);
+				var hasKanji = kanjiVal != null && !string.IsNullOrWhiteSpace(kanjiVal.Value);
+				if (!hasKanji)
+				{
+					return false;
+				}
+
+				return settings.Mode switch
+				{
+					CommandSettings.UpdateMode.Replace => true,
+					CommandSettings.UpdateMode.ReadOnly => true,
+					CommandSettings.UpdateMode.AddEmpty => sourceToDest.Values.Any(dest =>
+					{
+						var fieldVal = n.Fields.FirstOrDefault(kvp => keyComparer.Equals(kvp.Key, dest)).Value;
+						return fieldVal == null || string.IsNullOrWhiteSpace(fieldVal.Value);
+					}),
+					_ => throw new ArgumentOutOfRangeException()
+				};
 			})
 			.ToList();
 
@@ -156,6 +144,7 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 								Mnemonic = result.Mnemonic with { Text = cleaned }
 							};
 						}
+
 						kanjiResultMap[kanji] = result;
 						AnsiConsole.MarkupLine($"[green]Found[/]: {kanji}");
 					}
@@ -166,7 +155,7 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 				}
 			});
 
-		if (settings.ReadOnly)
+		if (settings.Mode == CommandSettings.UpdateMode.ReadOnly)
 		{
 			AnsiConsole.MarkupLine("[bold yellow]Read-only mode — no cards will be updated.[/]");
 			var table = new Table();
@@ -186,6 +175,7 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 				{
 					row.AddRange(Enumerable.Repeat("[yellow]—[/]", sourceToDest.Count));
 				}
+
 				table.AddRow(row.ToArray());
 			}
 
@@ -240,8 +230,10 @@ public class RenshuuCommand : AsyncCommand<CommandSettings>
 		{
 			"kanji" => kr.Kanji,
 			"meaning" => kr.Meaning,
-			"kunyomi" => string.Join(", ", kr.Kunyomi.Select(r => string.IsNullOrEmpty(r.SchoolLevel) ? r.Text : $"{r.Text} ({r.SchoolLevel})")),
-			"onyomi" => string.Join(", ", kr.Onyomi.Select(r => string.IsNullOrEmpty(r.SchoolLevel) ? r.Text : $"{r.Text} ({r.SchoolLevel})")),
+			"kunyomi" => string.Join(", ",
+				kr.Kunyomi.Select(r => string.IsNullOrEmpty(r.SchoolLevel) ? r.Text : $"{r.Text} ({r.SchoolLevel})")),
+			"onyomi" => string.Join(", ",
+				kr.Onyomi.Select(r => string.IsNullOrEmpty(r.SchoolLevel) ? r.Text : $"{r.Text} ({r.SchoolLevel})")),
 			"radical" => kr.Radical != null ? $"{kr.Radical.Character}: {string.Join(", ", kr.Radical.Names)}" : "",
 			"strokes" => kr.Strokes > 0 ? kr.Strokes.ToString() : "",
 			"mnemonic" => kr.FormattedMnemonic,
