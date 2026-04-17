@@ -1,6 +1,6 @@
-# Renshuu Mnemonic Extractor
+# Renshuu To Anki
 
-Fetches kanji mnemonics from [Renshuu.org](https://www.renshuu.org) and fills them into your Anki cards via AnkiConnect.
+Fetches fields from Kanji from [Renshuu.org](https://www.renshuu.org) and places them into your Anki cards via AnkiConnect.
 
 ## Prerequisites
 
@@ -9,8 +9,8 @@ Fetches kanji mnemonics from [Renshuu.org](https://www.renshuu.org) and fills th
 
 ## Setup
 
-1. **Configure your Anki note type** to have a field for the kanji character (e.g., `Character`) and a field for mnemonics (e.g., `Mnemonic`). Pass the field names via `--kanji-field` and `--mnemonic-field` CLI arguments.
-2. **Adjust the default query** in `Console/Settings.cs` if needed, or pass it via CLI.
+1. **Configure your Anki note type** and ensure there's unique fields for each part of the Renshuu Kanji dictionary. Pass fields via CLI arguments (see mapping below).
+2. **Build the solution** using `dotnet build`
 
 ## Run
 
@@ -21,24 +21,38 @@ dotnet run
 
 ## CLI Options
 
-| Option             | Description                                     | Default                 |
-|--------------------|-------------------------------------------------|-------------------------|
-| `--query`          | Anki search query for cards to update           | (none)                  |
-| `--anki-url`       | AnkiConnect HTTP URL                            | `http://localhost:8765` |
-| `--rpm`            | Max requests per minute to Renshuu              | `120`                   |
-| `--read-only`      | Preview changes without writing to Anki         | `false`                 |
-| `--kanji-field`    | Field containing the kanji character to look up | `"Kanji"`               |
-| `--mnemonic-field` | Field to write fetched mnemonics into           | `"Mnemonic"`            |
-| `--overwrite`      | Overwrite existing mnemonic values              | `false`                 |
+| Option        | Description                                                                                                                                                 | Default                 |
+|---------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------|
+| `--query`     | Anki search query for cards to update                                                                                                                       | (none)                  |
+| `--anki-url`  | AnkiConnect HTTP URL                                                                                                                                        | `http://localhost:8765` |
+| `--rpm`       | Max requests per minute to Renshuu                                                                                                                          | `120`                   |
+| `--field`     | Source→destination field mapping                                                                                                                            | (none)                  |
+| `--mode`      | Operation mode: `readonly` (preview only), `replace` (update all), `addempty` (only fill empty fields)                 | `addempty`              |
 
-Example — run against a specific deck and actually update cards:
+### `--field` Mapping
 
+The `--field` option maps Renshuu data sources to Anki note fields. Specify multiple times for different fields.
+
+**Supported sources:** `kanji`, `kunyomi`, `onyomi`, `radical`, `meaning`, `strokes`, `mnemonic`, `jlpt`, `kentei`
+
+**Example — Full multi-field update:**
 ```bash
-dotnet run -- --query "deck:Kanji"
+dotnet run -- \
+    --query "deck:Kanji" \
+    --field kanji=Character \
+    --field meaning=Meaning \
+    --field kunyomi=Kunyomi \
+    --field onyomi=Onyomi \
+    --field radical=Radical \
+    --field strokes=Strokes \
+    --field mnemonic=Mnemonic
 ```
 
-Example — using custom field names for a different note type:
-
+**Example — Meaning-only update (read-only preview):**
 ```bash
-dotnet run -- --kanji-field "Character" --mnemonic-field "Hint" --query "deck:Japanese"
+dotnet run -- \
+    --query "tag:new" \
+    --field kanji=Character \
+    --field meaning=Meaning \
+    --mode readonly
 ```
